@@ -5,6 +5,67 @@ import cv2
 import sensor_msgs.msg
 import numpy as np
 import copy
+from rcl_interfaces.msg import ParameterDescriptor
+
+class HSV():
+    def __init__(self,H,S,V):
+        self.H = H
+        self.S = S
+        self.V = V
+
+    def to_array(self):
+        return [self.H,self.S,self.V]
+
+    def to_np_array(self):
+        return np.array(self.to_array())
+
+class HSVLimits():
+    
+    def __init__(self,name,window_name,lower_bounds,upper_bounds,use_trackbar=False):
+        self.lower = HSV(lower_bounds[0],lower_bounds[1],lower_bounds[2])
+        self.upper = HSV(upper_bounds[0],upper_bounds[1],upper_bounds[2])
+        self.name = name
+        self.window_name = window_name
+        self.lower_names = HSV(self.name + ' H lo', self.name + ' S lo', self.name + ' V lo')
+        self.upper_names = HSV(self.name + ' H hi', self.name + ' S hi', self.name + ' V hi')
+
+        if use_trackbar:
+            cv2.createTrackbar(self.lower_names.H, self.window_name,self.lower.H,180,self.trackbar_lower_H)
+            cv2.createTrackbar(self.upper_names.H, self.window_name,self.upper.H,180,self.trackbar_upper_H)
+            cv2.createTrackbar(self.lower_names.S, self.window_name,self.lower.S,255,self.trackbar_lower_S)
+            cv2.createTrackbar(self.upper_names.S, self.window_name,self.upper.S,255,self.trackbar_upper_S)
+            cv2.createTrackbar(self.lower_names.V, self.window_name,self.lower.V,255,self.trackbar_lower_V)
+            cv2.createTrackbar(self.upper_names.V, self.window_name,self.upper.V,255,self.trackbar_upper_V)
+
+    def trackbar_lower_H(self,val):
+        self.lower.H = val
+        self.lower.H = min(self.upper.H-1, self.lower.H)
+        cv2.setTrackbarPos(self.lower_names.H,self.window_name,self.lower.H)
+
+    def trackbar_upper_H(self,val):
+        self.upper.H = val
+        self.upper.H = max(self.lower.H+1, self.upper.H)
+        cv2.setTrackbarPos(self.upper_names.H,self.window_name,self.upper.H)
+
+    def trackbar_lower_S(self,val):
+        self.lower.S = val
+        self.lower.S = min(self.upper.S-1, self.lower.S)
+        cv2.setTrackbarPos(self.lower_names.S,self.window_name,self.lower.S)
+
+    def trackbar_upper_S(self,val):
+        self.upper.S = val
+        self.upper.S = max(self.lower.S+1, self.upper.S)
+        cv2.setTrackbarPos(self.upper_names.S,self.window_name,self.upper.S)
+
+    def trackbar_lower_V(self,val):
+        self.lower.V = val
+        self.lower.V = min(self.upper.V-1, self.lower.V)
+        cv2.setTrackbarPos(self.lower_names.V,self.window_name,self.lower.V)
+
+    def trackbar_upper_V(self,val):
+        self.upper.V = val
+        self.upper.V = max(self.lower.V+1, self.upper.V)
+        cv2.setTrackbarPos(self.upper_names.V,self.window_name,self.upper.V)
 
 class CameraProcessor(Node):
     """TODO"""
@@ -16,50 +77,34 @@ class CameraProcessor(Node):
         self.interval = 1.0 / 100.0
         self.timer = self.create_timer(self.interval, self.timer_callback)
         self.sub_image = self.create_subscription(sensor_msgs.msg.Image,'/camera/color/image_raw',self.image_callback,10)
-        
+
+        self.declare_parameter("enable_ally_sliders", False,
+                               ParameterDescriptor(description="Enable Ally HSV sliders"))
+        self.enable_ally_sliders = self.get_parameter("enable_ally_sliders").get_parameter_value().bool_value
+        self.declare_parameter("enable_enemy_sliders", False,
+                               ParameterDescriptor(description="Enable Enemy HSV sliders"))
+        self.enable_enemy_sliders = self.get_parameter("enable_enemy_sliders").get_parameter_value().bool_value
+
         self.bridge = CvBridge()
 
-        # Define HSV color limits
-        self.lower_H = 119#117
-        self.lower_S = 74#110
-        self.lower_V = 0#0
-
-        # B = 69, G = 27, R = 26
-        # H = 119, S = 159, V = 69
-        self.upper_H = 164#139
-        self.upper_S = 255
-        self.upper_V = 255
-
-        self.lower_H_name = 'H Low'
-
-        self.window_name = 'Pen Tracker'
+        self.window_name = 'Color Image'
         cv2.namedWindow(self.window_name, cv2.WINDOW_NORMAL)
-        cv2.createTrackbar(self.lower_H_name, self.window_name,self.lower_H,180,self.trackbar_lower_H)
+
+        self.ally_hsv = HSVLimits('Ally',self.window_name,[119,74,0],[164,255,255],self.enable_ally_sliders)
+        self.enemy_hsv = HSVLimits('Enemy',self.window_name,[119,74,0],[164,255,255],self.enable_enemy_sliders)
 
         self.get_logger().info("camera node started")
     
     def timer_callback(self):
         pass
-    
-        
-    def trackbar_lower_H(self,val):
-        self.lower_H = val
-        self.lower_H = min(self.upper_H-1, self.lower_H)
-        cv2.setTrackbarPos(self.lower_H_name,self.window_name,self.lower_H)
-    
 
     def image_callback(self, msg):
-        
-
-        # HSV values
-        pen_lower = np.array([self.lower_H,self.lower_S,self.lower_V])
-        pen_upper = np.array([self.upper_H,self.upper_S,self.upper_V])
 
         color_image = self.bridge.imgmsg_to_cv2(msg,desired_encoding='bgr8')
         hsv_image = cv2.cvtColor(color_image, cv2.COLOR_BGR2HSV)
         color_image_with_tracking = copy.deepcopy(color_image)
         # Threshold HSV image to get only purple
-        mask = cv2.inRange(hsv_image,pen_lower,pen_upper)
+        mask = cv2.inRange(hsv_image,self.ally_hsv.lower.to_np_array(),self.ally_hsv.upper.to_np_array())
 
         # Get contours
         ret, thresh = cv2.threshold(mask, 127, 255, 0)
