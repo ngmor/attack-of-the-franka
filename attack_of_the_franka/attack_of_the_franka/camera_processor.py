@@ -78,20 +78,27 @@ class CameraProcessor(Node):
         self.timer = self.create_timer(self.interval, self.timer_callback)
         self.sub_image = self.create_subscription(sensor_msgs.msg.Image,'/camera/color/image_raw',self.image_callback,10)
 
-        self.declare_parameter("enable_ally_sliders", False,
+        self.declare_parameter("enable_ally_sliders", True,
                                ParameterDescriptor(description="Enable Ally HSV sliders"))
         self.enable_ally_sliders = self.get_parameter("enable_ally_sliders").get_parameter_value().bool_value
-        self.declare_parameter("enable_enemy_sliders", False,
+        self.declare_parameter("enable_enemy_sliders", True,
                                ParameterDescriptor(description="Enable Enemy HSV sliders"))
         self.enable_enemy_sliders = self.get_parameter("enable_enemy_sliders").get_parameter_value().bool_value
 
         self.bridge = CvBridge()
 
-        self.window_name = 'Color Image'
-        cv2.namedWindow(self.window_name, cv2.WINDOW_NORMAL)
+        self.color_window_name = 'Color Image'
+        self.ally_mask_window_name = 'Ally Mask'
+        self.enemy_mask_window_name = 'Enemy Mask'
+        cv2.namedWindow(self.color_window_name, cv2.WINDOW_NORMAL)
+        if self.enable_ally_sliders:
+            cv2.namedWindow(self.ally_mask_window_name, cv2.WINDOW_NORMAL)
 
-        self.ally_hsv = HSVLimits('Ally',self.window_name,[119,74,0],[164,255,255],self.enable_ally_sliders)
-        self.enemy_hsv = HSVLimits('Enemy',self.window_name,[119,74,0],[164,255,255],self.enable_enemy_sliders)
+        if self.enable_enemy_sliders:
+            cv2.namedWindow(self.enemy_mask_window_name, cv2.WINDOW_NORMAL)
+
+        self.ally_hsv = HSVLimits('Ally',self.ally_mask_window_name,[119,74,0],[164,255,255],self.enable_ally_sliders)
+        self.enemy_hsv = HSVLimits('Enemy',self.enemy_mask_window_name,[65,53,108],[91,255,255],self.enable_enemy_sliders)
 
         self.get_logger().info("camera node started")
     
@@ -103,41 +110,79 @@ class CameraProcessor(Node):
         color_image = self.bridge.imgmsg_to_cv2(msg,desired_encoding='bgr8')
         hsv_image = cv2.cvtColor(color_image, cv2.COLOR_BGR2HSV)
         color_image_with_tracking = copy.deepcopy(color_image)
-        # Threshold HSV image to get only purple
-        mask = cv2.inRange(hsv_image,self.ally_hsv.lower.to_np_array(),self.ally_hsv.upper.to_np_array())
+        # Threshold HSV image to get only ally color
+        mask_ally = cv2.inRange(hsv_image,self.ally_hsv.lower.to_np_array(),self.ally_hsv.upper.to_np_array())
 
-        # Get contours
-        ret, thresh = cv2.threshold(mask, 127, 255, 0)
-        contours, hierarchy = cv2.findContours(thresh, cv2.RETR_TREE, cv2.CHAIN_APPROX_SIMPLE)
+        # Get contours of ally
+        ret_ally, thresh_ally = cv2.threshold(mask_ally, 127, 255, 0)
+        contours_ally, hierarchy_ally = cv2.findContours(thresh_ally, cv2.RETR_TREE, cv2.CHAIN_APPROX_SIMPLE)
 
-        validContour = True
+        valid_contour_ally = True
 
         # Make sure we have contours
-        if len(contours) <= 0:
-            validContour = False
+        if len(contours_ally) <= 0:
+            valid_contour_ally = False
 
         else:
             # Get largest contours
-            largest_contour = max(contours, key = cv2.contourArea)
+            largest_contour_ally = max(contours_ally, key = cv2.contourArea)
 
             # calculate moments
-            moments = cv2.moments(largest_contour)
+            moments_ally = cv2.moments(largest_contour_ally)
 
             # Not valid if this moment is 0
-            if moments['m00'] == 0:
-                validContour = False
+            if moments_ally['m00'] == 0:
+                valid_contour_ally = False
             else:  
                 # Calculate centroids
-                centroid_x = int(moments['m10']/moments['m00'])
-                centroid_y = int(moments['m01']/moments['m00'])
+                centroid_x_ally = int(moments_ally['m10']/moments_ally['m00'])
+                centroid_y_ally = int(moments_ally['m01']/moments_ally['m00'])
 
                 # Add contours to image
-                color_image_with_tracking = cv2.drawContours(color_image_with_tracking, [largest_contour], 0, (0,255,0), 3)
+                color_image_with_tracking = cv2.drawContours(color_image_with_tracking, [largest_contour_ally], 0, (255,0,0), 3)
 
                 # Add centroid to color image
-                color_image_with_tracking = cv2.circle(color_image_with_tracking, (centroid_x,centroid_y), radius=10, color=(0, 0, 255), thickness=-1)
+                color_image_with_tracking = cv2.circle(color_image_with_tracking, (centroid_x_ally,centroid_y_ally), radius=10, color=(255, 0, 0), thickness=-1)
 
-        cv2.imshow(self.window_name,color_image_with_tracking)
+        # Threshold HSV image to get only enemy color
+        mask_enemy = cv2.inRange(hsv_image,self.enemy_hsv.lower.to_np_array(),self.enemy_hsv.upper.to_np_array())
+
+        # Get contours of ally
+        ret_enemy, thresh_enemy = cv2.threshold(mask_enemy, 127, 255, 0)
+        contours_enemy, hierarchy_enemy = cv2.findContours(thresh_enemy, cv2.RETR_TREE, cv2.CHAIN_APPROX_SIMPLE)
+
+        valid_contour_enemy = True
+
+        # Make sure we have contours
+        if len(contours_enemy) <= 0:
+            valid_contour_enemy = False
+
+        else:
+            # Get largest contours
+            largest_contour_enemy = max(contours_enemy, key = cv2.contourArea)
+
+            # calculate moments
+            moments_enemy = cv2.moments(largest_contour_enemy)
+
+            # Not valid if this moment is 0
+            if moments_enemy['m00'] == 0:
+                valid_contour_enemy = False
+            else:  
+                # Calculate centroids
+                centroid_x_enemy = int(moments_enemy['m10']/moments_enemy['m00'])
+                centroid_y_enemy = int(moments_enemy['m01']/moments_enemy['m00'])
+
+                # Add contours to image
+                color_image_with_tracking = cv2.drawContours(color_image_with_tracking, [largest_contour_enemy], 0, (0,0,255), 3)
+
+                # Add centroid to color image
+                color_image_with_tracking = cv2.circle(color_image_with_tracking, (centroid_x_enemy,centroid_y_enemy), radius=10, color=(0, 0, 255), thickness=-1)
+
+        if self.ally_mask_window_name:
+            cv2.imshow(self.ally_mask_window_name,mask_ally)
+        if self.enemy_mask_window_name:
+            cv2.imshow(self.enemy_mask_window_name, mask_enemy)
+        cv2.imshow(self.color_window_name,color_image_with_tracking)
 
         cv2.waitKey(1)
 
