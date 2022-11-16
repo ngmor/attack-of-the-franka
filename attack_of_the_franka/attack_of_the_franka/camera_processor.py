@@ -76,7 +76,9 @@ class CameraProcessor(Node):
 
         self.interval = 1.0 / 100.0
         self.timer = self.create_timer(self.interval, self.timer_callback)
-        self.sub_image = self.create_subscription(sensor_msgs.msg.Image,'/camera/color/image_raw',self.image_callback,10)
+        self.sub_color_image = self.create_subscription(sensor_msgs.msg.Image,'/camera/color/image_raw',self.color_image_callback,10)
+        self.sub_color_camera_info = self.create_subscription(sensor_msgs.msg.CameraInfo,'/camera/color/camera_info',self.color_info_callback,10)
+        self.sub_aligned_depth_image = self.create_subscription(sensor_msgs.msg.Image,'/camera/aligned_depth_to_color/image_raw',self.aligned_depth_image_callback,10)
 
         self.declare_parameter("enable_ally_sliders", True,
                                ParameterDescriptor(description="Enable Ally HSV sliders"))
@@ -104,10 +106,10 @@ class CameraProcessor(Node):
     
     def timer_callback(self):
         pass
+    
+    def color_image_callback(self, data):
 
-    def image_callback(self, msg):
-
-        color_image = self.bridge.imgmsg_to_cv2(msg,desired_encoding='bgr8')
+        color_image = self.bridge.imgmsg_to_cv2(data,desired_encoding='bgr8')
         hsv_image = cv2.cvtColor(color_image, cv2.COLOR_BGR2HSV)
         color_image_with_tracking = copy.deepcopy(color_image)
         # Threshold HSV image to get only ally color
@@ -186,7 +188,18 @@ class CameraProcessor(Node):
 
         cv2.waitKey(1)
 
-    
+    def aligned_depth_image_callback(self,data):
+        aligned_depth_image = self.bridge.imgmsg_to_cv2(data)
+
+        depth_colormap = cv2.applyColorMap(cv2.convertScaleAbs(aligned_depth_image, alpha=0.3), cv2.COLORMAP_JET)
+        cv2.imshow('Depth Colormap',depth_colormap)
+        # self.get_logger().info(f'{aligned_depth_image[0][0]}')
+
+    def color_info_callback(self,info):
+        pass
+        # self.get_logger().info(f'Color: {info}')
+        # TODO - get intrinsics
+
 
 def entry(args=None):
     rclpy.init(args=args)
