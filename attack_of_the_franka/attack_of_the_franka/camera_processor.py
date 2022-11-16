@@ -19,24 +19,41 @@ class CameraProcessor(Node):
         
         self.bridge = CvBridge()
 
-        self.get_logger().info("camera node started")
-
-    def image_callback(self, msg):
-        
         # Define HSV color limits
-        lower_H = 119#117
-        lower_S = 74#110
-        lower_V = 0#0
+        self.lower_H = 119#117
+        self.lower_S = 74#110
+        self.lower_V = 0#0
 
         # B = 69, G = 27, R = 26
         # H = 119, S = 159, V = 69
-        upper_H = 164#139
-        upper_S = 255
-        upper_V = 255
+        self.upper_H = 164#139
+        self.upper_S = 255
+        self.upper_V = 255
+
+        self.lower_H_name = 'H Low'
+
+        self.window_name = 'Pen Tracker'
+        cv2.namedWindow(self.window_name, cv2.WINDOW_NORMAL)
+        cv2.createTrackbar(self.lower_H_name, self.window_name,self.lower_H,180,self.trackbar_lower_H)
+
+        self.get_logger().info("camera node started")
+    
+    def timer_callback(self):
+        pass
+    
+        
+    def trackbar_lower_H(self,val):
+        self.lower_H = val
+        self.lower_H = min(self.upper_H-1, self.lower_H)
+        cv2.setTrackbarPos(self.lower_H_name,self.window_name,self.lower_H)
+    
+
+    def image_callback(self, msg):
+        
 
         # HSV values
-        pen_lower = np.array([lower_H,lower_S,lower_V])
-        pen_upper = np.array([upper_H,upper_S,upper_V])
+        pen_lower = np.array([self.lower_H,self.lower_S,self.lower_V])
+        pen_upper = np.array([self.upper_H,self.upper_S,self.upper_V])
 
         color_image = self.bridge.imgmsg_to_cv2(msg,desired_encoding='bgr8')
         hsv_image = cv2.cvtColor(color_image, cv2.COLOR_BGR2HSV)
@@ -75,12 +92,11 @@ class CameraProcessor(Node):
                 # Add centroid to color image
                 color_image_with_tracking = cv2.circle(color_image_with_tracking, (centroid_x,centroid_y), radius=10, color=(0, 0, 255), thickness=-1)
 
-        cv2.imshow("camera",color_image_with_tracking)
+        cv2.imshow(self.window_name,color_image_with_tracking)
 
         cv2.waitKey(1)
 
-    def timer_callback(self):
-        pass
+    
 
 def entry(args=None):
     rclpy.init(args=args)
