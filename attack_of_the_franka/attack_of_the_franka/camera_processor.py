@@ -1,11 +1,12 @@
 import rclpy
 from rclpy.node import Node
-from cv_bridge import CvBridge
+from cv_bridge import CvBridge, CvBridgeError
 import cv2
 import sensor_msgs.msg
 import numpy as np
 import copy
 from rcl_interfaces.msg import ParameterDescriptor
+import pyrealsense2 as rs2
 import geometry_msgs.msg
 
 class HSV():
@@ -78,6 +79,7 @@ class ContourData():
 
         self.moments = cv2.moments(self.contour)
         self.centroid = Pixel()
+        self.coord = None
 
         # valid contour if area is not 0
         self.valid = self.moments['m00'] != 0
@@ -85,6 +87,26 @@ class ContourData():
         if self.valid:
             self.centroid.x = int(self.moments['m10']/self.moments['m00'])
             self.centroid.y = int(self.moments['m01']/self.moments['m00'])
+
+    def calc_coord(self,depth_image,intrinsics):
+        """Calculate coordinates from depth image and intrinsics."""
+        if (not self.valid) or not intrinsics:
+            self.coord = None
+            return
+
+        try:
+            depth = depth_image[self.centroid.y, self.centroid.x]
+            pixel = [self.centroid.x, self.centroid.y]
+            position = rs2.rs2_deproject_pixel_to_point(intrinsics,pixel,depth)
+
+            self.coord = geometry_msgs.msg.Point()
+            self.coord.x = position[0]
+            self.coord.y = position[1]
+            self.coord.z = position[2]
+
+        except ValueError as e:
+            self.coord = None
+            return
 
 
 class CameraProcessor(Node):
@@ -108,8 +130,10 @@ class CameraProcessor(Node):
         self.enable_enemy_sliders = self.get_parameter("enable_enemy_sliders").get_parameter_value().bool_value
 
         self.bridge = CvBridge()
+        self.intrinsics = None
 
         self.color_image = None
+        self.aligned_depth_image = None
         self.color_window_name = 'Color Image'
         self.ally_mask_window_name = 'Ally Mask'
         self.enemy_mask_window_name = 'Enemy Mask'
@@ -214,23 +238,53 @@ class CameraProcessor(Node):
 
         cv2.imshow(self.color_window_name,color_image_with_tracking)
 
+        # Find real world coordinates of all contours
+        if (self.aligned_depth_image is not None) and (self.intrinsics is not None):
+            for contour in self.contours_filtered_ally:
+                contour.calc_coord(self.aligned_depth_image,self.intrinsics)
+
+            for contour in self.contours_filtered_enemy:
+                contour.calc_coord(self.aligned_depth_image,self.intrinsics)
+
+            # TODO - publish transforms for these coordinates to the camera frame
+        
+        
         cv2.waitKey(1)
     
     def color_image_callback(self, data):
-
-        self.color_image = self.bridge.imgmsg_to_cv2(data,desired_encoding='bgr8')
+        try:
+            self.color_image = self.bridge.imgmsg_to_cv2(data,desired_encoding='bgr8')
+        except CvBridgeError as e:
+            print(e)
+            return
 
     def aligned_depth_image_callback(self,data):
-        aligned_depth_image = self.bridge.imgmsg_to_cv2(data)
-
-        depth_colormap = cv2.applyColorMap(cv2.convertScaleAbs(aligned_depth_image, alpha=0.3), cv2.COLORMAP_JET)
-        # cv2.imshow('Depth Colormap',depth_colormap)
-        # self.get_logger().info(f'{aligned_depth_image[0][0]}')
+        try:
+            self.aligned_depth_image = self.bridge.imgmsg_to_cv2(data)
+        except CvBridgeError as e:
+            print(e)
+            return
 
     def color_info_callback(self,info):
-        pass
-        # self.get_logger().info(f'Color: {info}')
-        # TODO - get intrinsics
+        # https://github.com/IntelRealSense/realsense-ros/blob/ros2-development/realsense2_camera/scripts/show_center_depth.py
+        try:
+            if self.intrinsics:
+                return
+            self.intrinsics = rs2.intrinsics()
+            self.intrinsics.width = info.width
+            self.intrinsics.height = info.height
+            self.intrinsics.ppx = info.k[2]
+            self.intrinsics.ppy = info.k[5]
+            self.intrinsics.fx = info.k[0]
+            self.intrinsics.fy = info.k[4]
+            if info.distortion_model == 'plumb_bob':
+                self.intrinsics.model = rs2.distortion.brown_conrady
+            elif info.distortion_model == 'equidistant':
+                self.intrinsics.model = rs2.distortion.kannala_brandt4
+            self.intrinsics.coeffs = [i for i in info.d]
+        except CvBridgeError as e:
+            print(e)
+            return
 
 
 def entry(args=None):
