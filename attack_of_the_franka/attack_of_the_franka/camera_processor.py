@@ -6,6 +6,8 @@ import sensor_msgs.msg
 import numpy as np
 import copy
 from rcl_interfaces.msg import ParameterDescriptor
+import numpy as np
+import apriltag
 
 class HSV():
     def __init__(self,H,S,V):
@@ -109,6 +111,7 @@ class CameraProcessor(Node):
 
         color_image = self.bridge.imgmsg_to_cv2(msg,desired_encoding='bgr8')
         hsv_image = cv2.cvtColor(color_image, cv2.COLOR_BGR2HSV)
+        gray_image = cv2.cvtColor(color_image, cv2.COLOR_BGR2GRAY)
         color_image_with_tracking = copy.deepcopy(color_image)
         # Threshold HSV image to get only ally color
         mask_ally = cv2.inRange(hsv_image,self.ally_hsv.lower.to_np_array(),self.ally_hsv.upper.to_np_array())
@@ -178,11 +181,46 @@ class CameraProcessor(Node):
                 # Add centroid to color image
                 color_image_with_tracking = cv2.circle(color_image_with_tracking, (centroid_x_enemy,centroid_y_enemy), radius=10, color=(0, 0, 255), thickness=-1)
 
-        if self.ally_mask_window_name:
-            cv2.imshow(self.ally_mask_window_name,mask_ally)
-        if self.enemy_mask_window_name:
-            cv2.imshow(self.enemy_mask_window_name, mask_enemy)
-        cv2.imshow(self.color_window_name,color_image_with_tracking)
+        # if self.ally_mask_window_name:
+        #     cv2.imshow(self.ally_mask_window_name,mask_ally)
+        # if self.enemy_mask_window_name:
+        #     cv2.imshow(self.enemy_mask_window_name, mask_enemy)
+        # cv2.imshow(self.color_window_name,color_image_with_tracking)
+        self.get_logger().info('[INFO] detecting AprilTags...')
+        # print("[INFO] detecting AprilTags...")
+        options = apriltag.DetectorOptions(families="tag36h11")
+        detector = apriltag.Detector(options)
+        results = detector.detect(gray_image)
+        # print("[INFO] {} total AprilTags detected".format(len(results)))
+
+
+
+        # loop over the AprilTag detection results
+        for i in results:
+            # extract the bounding box (x, y)-coordinates for the AprilTag
+            # and convert each of the (x, y)-coordinate pairs to integers
+            (ptA, ptB, ptC, ptD) = i.corners
+            ptB = (int(ptB[0]), int(ptB[1]))
+            ptC = (int(ptC[0]), int(ptC[1]))
+            ptD = (int(ptD[0]), int(ptD[1]))
+            ptA = (int(ptA[0]), int(ptA[1]))
+            # draw the bounding box of the AprilTag detection
+            cv2.line(color_image, ptA, ptB, (0, 255, 0), 2)
+            cv2.line(color_image, ptB, ptC, (0, 255, 0), 2)
+            cv2.line(color_image, ptC, ptD, (0, 255, 0), 2)
+            cv2.line(color_image, ptD, ptA, (0, 255, 0), 2)
+            # draw the center (x, y)-coordinates of the AprilTag
+            (cX, cY) = (int(i.center[0]), int(i.center[1]))
+            cv2.circle(color_image, (cX, cY), 2, (0, 0, 255), -1)
+            # draw the tag family on the image
+            tagFamily = i.tag_family.decode("utf-8")
+            cv2.putText(color_image, tagFamily, (ptA[0], ptA[1] - 15),
+                cv2.FONT_HERSHEY_SIMPLEX, 0.3, (0, 255, 0), 2)
+            # print("[INFO] tag family: {}".format(tagFamily))
+        # show the output image after AprilTag detection
+        cv2.imshow("Image", color_image)
+        # cv2.waitKey(0)
+
 
         cv2.waitKey(1)
 
