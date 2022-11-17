@@ -94,7 +94,7 @@ class CameraProcessor(Node):
         """Class constructor."""
         super().__init__('camera_processor')
 
-        self.interval = 1.0 / 100.0
+        self.interval = 1.0 / 30.0 #30 fps
         self.timer = self.create_timer(self.interval, self.timer_callback)
         self.sub_color_image = self.create_subscription(sensor_msgs.msg.Image,'/camera/color/image_raw',self.color_image_callback,10)
         self.sub_color_camera_info = self.create_subscription(sensor_msgs.msg.CameraInfo,'/camera/color/camera_info',self.color_info_callback,10)
@@ -109,6 +109,7 @@ class CameraProcessor(Node):
 
         self.bridge = CvBridge()
 
+        self.color_image = None
         self.color_window_name = 'Color Image'
         self.ally_mask_window_name = 'Ally Mask'
         self.enemy_mask_window_name = 'Enemy Mask'
@@ -122,8 +123,11 @@ class CameraProcessor(Node):
         self.filter_kernel = 5
         cv2.createTrackbar('Kernel', self.color_window_name,self.filter_kernel,50,self.trackbar_filter_kernel)
 
-        self.area_threshold = 100
+        self.area_threshold = 8000
         cv2.createTrackbar('Area Threshold', self.color_window_name,self.area_threshold,10000,self.trackbar_area_threshold)
+
+        self.contours_filtered_ally = []
+        self.contours_filtered_enemy = []
 
         self.ally_hsv = HSVLimits('Ally',self.ally_mask_window_name,[100,57,43],[142,255,255],self.enable_ally_sliders)
         self.enemy_hsv = HSVLimits('Enemy',self.enemy_mask_window_name,[0,193,90],[9,255,206],self.enable_enemy_sliders)
@@ -136,13 +140,13 @@ class CameraProcessor(Node):
         self.area_threshold = val
     
     def timer_callback(self):
-        pass
-    
-    def color_image_callback(self, data):
+        
+        # Can't execute if there isn't a color image yet
+        if self.color_image is None:
+            return
 
-        color_image = self.bridge.imgmsg_to_cv2(data,desired_encoding='bgr8')
-        hsv_image = cv2.cvtColor(color_image, cv2.COLOR_BGR2HSV)
-        color_image_with_tracking = copy.deepcopy(color_image)
+        hsv_image = cv2.cvtColor(self.color_image, cv2.COLOR_BGR2HSV)
+        color_image_with_tracking = copy.deepcopy(self.color_image)
 
         kernel = np.ones((self.filter_kernel,self.filter_kernel),np.uint8)
 
@@ -158,12 +162,12 @@ class CameraProcessor(Node):
 
         # Make sure we have contours
         if len(contours_ally) > 0:
-            contours_filtered_ally = []
+            self.contours_filtered_ally = []
 
             for contour in contours_ally:
                 if cv2.contourArea(contour) > self.area_threshold:
                     contour_data = ContourData(contour)
-                    contours_filtered_ally.append(contour_data)
+                    self.contours_filtered_ally.append(contour_data)
 
                     # Only add contour to image if it is valid
                     if contour_data.valid:
@@ -185,12 +189,12 @@ class CameraProcessor(Node):
 
         # Make sure we have contours
         if len(contours_enemy) > 0:
-            contours_filtered_enemy = []
+            self.contours_filtered_enemy = []
 
             for contour in contours_enemy:
                 if cv2.contourArea(contour) > self.area_threshold:
                     contour_data = ContourData(contour)
-                    contours_filtered_enemy.append(contour_data)
+                    self.contours_filtered_enemy.append(contour_data)
 
                     # Only add contour to image if it is valid
                     if contour_data.valid:
@@ -204,9 +208,17 @@ class CameraProcessor(Node):
             cv2.imshow(self.ally_mask_window_name,mask_ally)
         if self.enable_enemy_sliders:
             cv2.imshow(self.enemy_mask_window_name, mask_enemy)
+
+        color_image_with_tracking = cv2.putText(color_image_with_tracking, f'Allies: {len(self.contours_filtered_ally)}',(50,50),cv2.FONT_HERSHEY_DUPLEX,1,(255,0,0))
+        color_image_with_tracking = cv2.putText(color_image_with_tracking, f'Enemies: {len(self.contours_filtered_enemy)}',(50,100),cv2.FONT_HERSHEY_DUPLEX,1,(0,0,255))
+
         cv2.imshow(self.color_window_name,color_image_with_tracking)
 
         cv2.waitKey(1)
+    
+    def color_image_callback(self, data):
+
+        self.color_image = self.bridge.imgmsg_to_cv2(data,desired_encoding='bgr8')
 
     def aligned_depth_image_callback(self,data):
         aligned_depth_image = self.bridge.imgmsg_to_cv2(data)
