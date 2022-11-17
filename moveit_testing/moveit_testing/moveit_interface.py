@@ -73,10 +73,10 @@ import moveit_msgs.action
 import moveit_msgs.srv
 import sensor_msgs.msg
 import std_msgs.msg
+import shape_msgs.msg
 import rclpy
 from tf2_ros.buffer import Buffer
 from tf2_ros.transform_listener import TransformListener
-
 
 # TODO - change to use SMACH?
 class _State(Enum):
@@ -221,6 +221,33 @@ class MoveIt():
         self._tf_buffer = Buffer()
         self._tf_listener = TransformListener(self._tf_buffer, self._node)
         self._ik_start_sec = 0
+
+        # ----------------- Sample Collision Object -------------------- #
+        obstacle_pose1 = geometry_msgs.msg.Pose()
+        obstacle_shape1 = shape_msgs.msg.SolidPrimitive()
+        self.sample_attached_collision = moveit_msgs.msg.AttachedCollisionObject()
+        self.sample_attached_collision.link_name = 'panda_hand_tcp'
+        self.sample_attached_collision.object.id = 'saber'
+
+        obstacle_pose1.position.x = 0.1
+        obstacle_pose1.position.y = 0.1
+        obstacle_pose1.position.z = 0.0
+        obstacle_pose1.orientation.w = 1.0
+        self.sample_attached_collision.object.primitive_poses = [obstacle_pose1]
+        
+        obstacle_shape1.type = 2
+        obstacle_shape1.dimensions = [0.2, 0.2, 0.2]
+        self.sample_attached_collision.object.primitives = [obstacle_shape1]
+        self.sample_attached_collision.object.header.frame_id = 'panda_manipulator'
+        self.sample_attached_collision.object.header.stamp = self._node.get_clock().now().to_msg()
+        add = 0
+        self.sample_attached_collision.object.operation = add.to_bytes(1,'big')
+        # has a detach pose element that is important for end-effector grasping
+        # has weight element to specify for lightsaber down the line
+        attached_object = moveit_msgs.msg.PlanningScene()
+        attached_object.robot_state.attached_collision_objects = [self.sample_attached_collision]
+        self._obstacle_pub.publish(attached_object)
+        # -------------------------------------------------------------- #
 
     def handle(self):
         """
