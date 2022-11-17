@@ -1,0 +1,7 @@
+geometry_msgs/Point position # position to place obstacle to
+float64 length  # length of the obstacle
+float64 width   # width of the obstacle   
+float64 height  # height of the obstacle 
+string id       # id of the obstacle
+bool delete_obstacle     # delete flag to remove obstacle
+---

@@ -1,0 +1,2 @@
+geometry_msgs/Pose pose # pose to move robot end effector to
+---

@@ -1,0 +1,2 @@
+geometry_msgs/Point position # position to move robot end effector to
+---
