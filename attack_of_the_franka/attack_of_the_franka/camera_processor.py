@@ -6,6 +6,7 @@ import sensor_msgs.msg
 import numpy as np
 import copy
 from rcl_interfaces.msg import ParameterDescriptor
+import geometry_msgs.msg
 
 class HSV():
     def __init__(self,H,S,V):
@@ -67,6 +68,25 @@ class HSVLimits():
         self.upper.V = max(self.lower.V+1, self.upper.V)
         cv2.setTrackbarPos(self.upper_names.V,self.window_name,self.upper.V)
 
+class Pixel():
+    x = 0
+    y = 0
+
+class ContourData():
+    def __init__(self,contour):
+        self.contour = contour
+
+        self.moments = cv2.moments(self.contour)
+        self.centroid = Pixel()
+
+        # valid contour if area is not 0
+        self.valid = self.moments['m00'] != 0
+
+        if self.valid:
+            self.centroid.x = int(self.moments['m10']/self.moments['m00'])
+            self.centroid.y = int(self.moments['m01']/self.moments['m00'])
+
+
 class CameraProcessor(Node):
     """TODO"""
 
@@ -100,16 +120,20 @@ class CameraProcessor(Node):
             cv2.namedWindow(self.enemy_mask_window_name, cv2.WINDOW_NORMAL)
 
         self.filter_kernel = 5
-        cv2.namedWindow(self.color_window_name, cv2.WINDOW_NORMAL)
         cv2.createTrackbar('Kernel', self.color_window_name,self.filter_kernel,50,self.trackbar_filter_kernel)
+
+        self.area_threshold = 100
+        cv2.createTrackbar('Area Threshold', self.color_window_name,self.area_threshold,10000,self.trackbar_area_threshold)
 
         self.ally_hsv = HSVLimits('Ally',self.ally_mask_window_name,[100,57,43],[142,255,255],self.enable_ally_sliders)
         self.enemy_hsv = HSVLimits('Enemy',self.enemy_mask_window_name,[0,193,90],[9,255,206],self.enable_enemy_sliders)
 
-        self.get_logger().info("camera node started")
+        self.get_logger().info("camera_processor node started")
 
     def trackbar_filter_kernel(self,val):
         self.filter_kernel = val
+    def trackbar_area_threshold(self,val):
+        self.area_threshold = val
     
     def timer_callback(self):
         pass
@@ -131,32 +155,24 @@ class CameraProcessor(Node):
         opening_then_closing_ally = cv2.morphologyEx(opening_ally, cv2.MORPH_CLOSE, kernel)
         contours_ally, hierarchy_ally = cv2.findContours(opening_then_closing_ally, cv2.RETR_TREE, cv2.CHAIN_APPROX_SIMPLE)
 
-        valid_contour_ally = True
 
         # Make sure we have contours
-        if len(contours_ally) <= 0:
-            valid_contour_ally = False
+        if len(contours_ally) > 0:
+            contours_filtered_ally = []
 
-        else:
-            # Get largest contours
-            largest_contour_ally = max(contours_ally, key = cv2.contourArea)
+            for contour in contours_ally:
+                if cv2.contourArea(contour) > self.area_threshold:
+                    contour_data = ContourData(contour)
+                    contours_filtered_ally.append(contour_data)
 
-            # calculate moments
-            moments_ally = cv2.moments(largest_contour_ally)
+                    # Only add contour to image if it is valid
+                    if contour_data.valid:
+                        # Add contours to image
+                        color_image_with_tracking = cv2.drawContours(color_image_with_tracking, [contour_data.contour], 0, (255,0,0), 3)
 
-            # Not valid if this moment is 0
-            if moments_ally['m00'] == 0:
-                valid_contour_ally = False
-            else:  
-                # Calculate centroids
-                centroid_x_ally = int(moments_ally['m10']/moments_ally['m00'])
-                centroid_y_ally = int(moments_ally['m01']/moments_ally['m00'])
+                        # Add centroid to color image
+                        color_image_with_tracking = cv2.circle(color_image_with_tracking, (contour_data.centroid.x,contour_data.centroid.y), radius=10, color=(255, 0, 0), thickness=-1)
 
-                # Add contours to image
-                color_image_with_tracking = cv2.drawContours(color_image_with_tracking, contours_ally, -1, (255,0,0), 3)
-
-                # Add centroid to color image
-                color_image_with_tracking = cv2.circle(color_image_with_tracking, (centroid_x_ally,centroid_y_ally), radius=10, color=(255, 0, 0), thickness=-1)
 
         # Threshold HSV image to get only enemy color
         mask_enemy = cv2.inRange(hsv_image,self.enemy_hsv.lower.to_np_array(),self.enemy_hsv.upper.to_np_array())
@@ -167,32 +183,22 @@ class CameraProcessor(Node):
         opening_then_closing_enemy = cv2.morphologyEx(opening_enemy, cv2.MORPH_CLOSE, kernel)
         contours_enemy, hierarchy_enemy = cv2.findContours(opening_then_closing_enemy, cv2.RETR_TREE, cv2.CHAIN_APPROX_SIMPLE)
 
-        valid_contour_enemy = True
-
         # Make sure we have contours
-        if len(contours_enemy) <= 0:
-            valid_contour_enemy = False
+        if len(contours_enemy) > 0:
+            contours_filtered_enemy = []
 
-        else:
-            # Get largest contours
-            largest_contour_enemy = max(contours_enemy, key = cv2.contourArea)
+            for contour in contours_enemy:
+                if cv2.contourArea(contour) > self.area_threshold:
+                    contour_data = ContourData(contour)
+                    contours_filtered_enemy.append(contour_data)
 
-            # calculate moments
-            moments_enemy = cv2.moments(largest_contour_enemy)
+                    # Only add contour to image if it is valid
+                    if contour_data.valid:
+                        # Add contours to image
+                        color_image_with_tracking = cv2.drawContours(color_image_with_tracking, [contour_data.contour], 0, (0,0,255), 3)
 
-            # Not valid if this moment is 0
-            if moments_enemy['m00'] == 0:
-                valid_contour_enemy = False
-            else:  
-                # Calculate centroids
-                centroid_x_enemy = int(moments_enemy['m10']/moments_enemy['m00'])
-                centroid_y_enemy = int(moments_enemy['m01']/moments_enemy['m00'])
-
-                # Add contours to image
-                color_image_with_tracking = cv2.drawContours(color_image_with_tracking, contours_enemy, -1, (0,0,255), 3)
-
-                # Add centroid to color image
-                color_image_with_tracking = cv2.circle(color_image_with_tracking, (centroid_x_enemy,centroid_y_enemy), radius=10, color=(0, 0, 255), thickness=-1)
+                        # Add centroid to color image
+                        color_image_with_tracking = cv2.circle(color_image_with_tracking, (contour_data.centroid.x,contour_data.centroid.y), radius=10, color=(0, 0, 255), thickness=-1)
 
         if self.enable_ally_sliders:
             cv2.imshow(self.ally_mask_window_name,mask_ally)
@@ -206,7 +212,7 @@ class CameraProcessor(Node):
         aligned_depth_image = self.bridge.imgmsg_to_cv2(data)
 
         depth_colormap = cv2.applyColorMap(cv2.convertScaleAbs(aligned_depth_image, alpha=0.3), cv2.COLORMAP_JET)
-        cv2.imshow('Depth Colormap',depth_colormap)
+        # cv2.imshow('Depth Colormap',depth_colormap)
         # self.get_logger().info(f'{aligned_depth_image[0][0]}')
 
     def color_info_callback(self,info):
