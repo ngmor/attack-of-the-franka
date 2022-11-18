@@ -19,7 +19,7 @@ apriltag:                 # node name
 
     # # (optional) list of tags
     # # If defined, 'frames' and 'sizes' must have the same length as 'ids'.
-    # tag:
-    #   ids:    [<id1>, <id2>, ...]         # tag IDs for which to publish transform
-    #   frames: [<frame1>, <frame2>, ...]   # frame names
+    tag:
+      ids:    [0]         # tag IDs for which to publish transform
+      frames: [reference_frame]   # frame names
     #   sizes:  [<size1>, <size1>, ...]     # tag-specific edge size, overrides the default 'size

@@ -8,6 +8,10 @@ import copy
 from rcl_interfaces.msg import ParameterDescriptor
 import pyrealsense2 as rs2
 import geometry_msgs.msg
+from tf2_ros.static_transform_broadcaster import StaticTransformBroadcaster
+from tf2_ros import TransformBroadcaster
+from geometry_msgs.msg import TransformStamped
+from tf2_ros.buffer import Buffer
 
 class HSV():
     def __init__(self,H,S,V):
@@ -155,6 +159,21 @@ class CameraProcessor(Node):
 
         self.ally_hsv = HSVLimits('Ally',self.ally_mask_window_name,[100,57,43],[142,255,255],self.enable_ally_sliders)
         self.enemy_hsv = HSVLimits('Enemy',self.enemy_mask_window_name,[0,193,90],[9,255,206],self.enable_enemy_sliders)
+
+        self.static_broadcaster = StaticTransformBroadcaster(self)
+        self.broadcaster = TransformBroadcaster(self)
+
+        self.apriltag_base = TransformStamped()
+        self.apriltag_base.header.frame_id = "reference_frame"
+        self.apriltag_base.child_frame_id = "panda_link0"
+
+        self.apriltag_base.transform.translation.x = 0.0
+        self.apriltag_base.transform.translation.y = 0.0
+        self.apriltag_base.transform.translation.z = 0.0
+
+        time = self.get_clock().now().to_msg()
+        self.apriltag_base.header.stamp = time
+        self.static_broadcaster.sendTransform(self.apriltag_base)
 
         self.get_logger().info("camera_processor node started")
 
