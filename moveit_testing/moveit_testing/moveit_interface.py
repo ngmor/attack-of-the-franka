@@ -235,18 +235,21 @@ class MoveIt():
         obstacle_pose1.orientation.w = 1.0
         self.sample_attached_collision.object.primitive_poses = [obstacle_pose1]
         
-        obstacle_shape1.type = 2
-        obstacle_shape1.dimensions = [0.2, 0.2, 0.2]
+        obstacle_shape1.type = 3
+        obstacle_shape1.dimensions = [0.2, 0.8, 0.2]
         self.sample_attached_collision.object.primitives = [obstacle_shape1]
         self.sample_attached_collision.object.header.frame_id = 'panda_manipulator'
         self.sample_attached_collision.object.header.stamp = self._node.get_clock().now().to_msg()
-        add = 0
-        self.sample_attached_collision.object.operation = add.to_bytes(1,'big')
+        self.sample_attached_collision.object.operation = self.sample_attached_collision.object.ADD
         # has a detach pose element that is important for end-effector grasping
         # has weight element to specify for lightsaber down the line
         attached_object = moveit_msgs.msg.PlanningScene()
+        attached_object.name = 'sample'
+        attached_object.robot_model_name = self.config.base_frame_id
         attached_object.robot_state.attached_collision_objects = [self.sample_attached_collision]
+        attached_object.world.collision_objects.append(self.sample_attached_collision.object)
         self._obstacle_pub.publish(attached_object)
+        self._node.get_logger().info("published")
         # -------------------------------------------------------------- #
 
     def handle(self):
