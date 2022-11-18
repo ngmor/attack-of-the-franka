@@ -36,4 +36,12 @@ def generate_launch_description():
                 ('pointcloud.enable', 'true'),
             ]
         ),
+        Node(
+            package='apriltag_ros',
+            executable='apriltag_node',
+            parameters=[PathJoinSubstitution(
+            [FindPackageShare('attack_of_the_franka'), 'apriltag.yaml'])],
+            remappings=[('/image_rect', '/camera/color/image_raw'),
+                        ('/camera_info', '/camera/color/camera_info'),]
+        )
     ])
