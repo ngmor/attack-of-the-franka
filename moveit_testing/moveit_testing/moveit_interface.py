@@ -231,14 +231,15 @@ class MoveIt():
 
         obstacle_pose1.position.x = 0.1
         obstacle_pose1.position.y = 0.1
-        obstacle_pose1.position.z = 0.0
+        obstacle_pose1.position.z = 0.3
+        obstacle_pose1.orientation.y = -1.0
         obstacle_pose1.orientation.w = 1.0
         self.sample_attached_collision.object.primitive_poses = [obstacle_pose1]
         
-        obstacle_shape1.type = 2
-        obstacle_shape1.dimensions = [0.2, 0.8, 0.2]
+        obstacle_shape1.type = 3
+        obstacle_shape1.dimensions = [0.6, 0.05, 0.2]
         self.sample_attached_collision.object.primitives = [obstacle_shape1]
-        self.sample_attached_collision.object.header.frame_id = 'panda_manipulator'
+        self.sample_attached_collision.object.header.frame_id = 'panda_arm'
         self.sample_attached_collision.object.header.stamp = self._node.get_clock().now().to_msg()
         self.sample_attached_collision.object.operation = self.sample_attached_collision.object.ADD
         # has a detach pose element that is important for end-effector grasping
