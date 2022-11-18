@@ -235,7 +235,7 @@ class MoveIt():
         obstacle_pose1.orientation.w = 1.0
         self.sample_attached_collision.object.primitive_poses = [obstacle_pose1]
         
-        obstacle_shape1.type = 3
+        obstacle_shape1.type = 2
         obstacle_shape1.dimensions = [0.2, 0.8, 0.2]
         self.sample_attached_collision.object.primitives = [obstacle_shape1]
         self.sample_attached_collision.object.header.frame_id = 'panda_manipulator'
