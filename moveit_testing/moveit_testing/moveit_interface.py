@@ -222,6 +222,7 @@ class MoveIt():
         self._tf_listener = TransformListener(self._tf_buffer, self._node)
         self._ik_start_sec = 0
 
+        self._persistent_obstacles = []
         # ----------------- Sample Collision Object -------------------- #
         obstacle_pose1 = geometry_msgs.msg.Pose()
         obstacle_shape1 = shape_msgs.msg.SolidPrimitive()
@@ -933,9 +934,44 @@ class MoveIt():
             # TODO - return some form of error, we are busy
             return
         self._obs_state = _ObstacleState.WAIT_FOR_READY
+        # if self._persistent_obstacle is not empty, append to obstacle_list
+        if self._persistent_obstacles:
+            obstacle_list.extend(self._persistent_obstacles)
         self._obs_list = obstacle_list
         self._delete_obs = delete
         # TODO - return some sort of message indicating success or failure
+        return
+
+    def update_attached_obstacles(self, attached_object):
+        """
+        Add an attached obstacle 
+
+        Args:
+            attached_object: object of type moveit_msgs.msg.AttachedCollisionObject()
+                             to add to the Planning Scene
+        Returns
+        -------
+            none
+        """
+        # add object to persistent obstacle list
+        self._persistent_obstacles.append(attached_object.object)
+        # add to planning scene's attached collision object list
+        self._planning_scene.robot_state.attached_collision_objects.append(attached_object)
+        return
+
+    def update_persistent_obstacle(self, obstacle):
+        """
+        Add an obstacle to the scene that doesn't exist physically
+
+        Args:
+            obstacle: object of type moveit_msgs.msg.CollisionObject()
+                      to add to the Planning Scene
+        Returns
+        -------
+            none
+        """
+        # add object to persistent obstacle list
+        self._persistent_obstacles.append(obstacle)
         return
 
     def get_last_error(self):
