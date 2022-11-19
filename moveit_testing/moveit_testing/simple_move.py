@@ -75,6 +75,13 @@ class SimpleMove(Node):
         self.srv_update_obstacles = self.create_service(
             moveit_testing_interfaces.srv.UpdateObstacles,
             'update_obstacles', self.obstacles_callback)
+        self.srv_update_persistent_obstacles = self.create_service(
+            moveit_testing_interfaces.srv.UpdateObstacles,
+            'update_persistent_obstacles', self.persistent_obstacles_callback)
+        self.srv_update_attached_obstacles = self.create_service(
+            moveit_testing_interfaces.srv.UpdateAttachedObstacles,
+            'update_attached_obstacles', self.attached_obstacles_callback)
+
 
         # Initialize API class
         config = MoveConfig()
@@ -401,6 +408,84 @@ class SimpleMove(Node):
 
         return response
 
+    def persistent_obstacles_callback(self, request, response):
+        """
+        Call /update_persistent_obstacles (moveit_testing_interfaces/srv/UpdateObstacles) service.
+
+        Store obstacle position, dimensions, id and delete flag value input by the user
+
+        Example call:
+        ros2 service call /update_persistent_obstacles moveit_testing_interfaces/srv/UpdateObstacles
+            "{position: {x: 0.75, y: 0.5, z: 0.0}, length: 1.0, width: 0.25, height: 4.0,
+            id: 'wall1', delete_obstacle: false}"
+
+        Args:
+            request (UpdateObstacles): obstacle information
+
+            response (EmptyResponse): no data
+
+        Returns
+        -------
+            response (EmptyResponse): no data
+
+        """
+        obstacle = moveit_msgs.msg.CollisionObject()
+        obstacle.id = request.id
+
+        pose = geometry_msgs.msg.Pose()
+        pose.position = request.position
+        obstacle.primitive_poses = [pose]
+
+        shape = shape_msgs.msg.SolidPrimitive()
+        shape.type = 1  # Box
+        shape.dimensions = [request.length, request.width, request.height]
+        obstacle.primitives = [shape]
+
+        obstacle.header.frame_id = self.moveit.config.base_frame_id
+
+        self.moveit.add_persistent_obstacle(obstacle, delete=request.delete_obstacle)
+
+        return response
+
+    def attached_obstacles_callback(self, request, response):
+        """
+        Call /update_persistent_obstacles (moveit_testing_interfaces/srv/UpdateAttachedObstacles) service.
+
+        Store obstacle position, dimensions, ids and delete flag value input by the user
+
+        Example call:
+        ros2 service call /update_attached_obstacles moveit_testing_interfaces/srv/UpdateAttachedObstacles
+            "{position: {x: 0.75, y: 0.5, z: 0.0}, length: 1.0, width: 0.25, height: 4.0,
+            id: 'gripping', delete_obstacle: false}"
+
+        Args:
+            request (UpdateAttachedObstacles): obstacle information
+
+            response (EmptyResponse): no data
+
+        Returns
+        -------
+            response (EmptyResponse): no data
+
+        """
+        attached_obstacle = moveit_msgs.msg.AttachedCollisionObject()
+        attached_obstacle.link_name = request.link_name
+        attached_obstacle.obstacle.id = request.id
+
+        pose = geometry_msgs.msg.Pose()
+        pose.position = request.position
+        attached_obstacle.obstacle.primitive_poses = [pose]
+
+        shape = shape_msgs.msg.SolidPrimitive()
+        shape.type = request.type  # Box
+        shape.dimensions = [request.length, request.width, request.height]
+        attached_obstacle.obstacle.primitives = [shape]
+
+        attached_obstacle.obstacle.header.frame_id = self.moveit.config.base_frame_id
+
+        self.moveit.add_persistent_obstacle(attached_obstacle.obstacle, delete=request.delete_obstacle)
+
+        return response
 
 def simple_move_entry(args=None):
     rclpy.init(args=args)

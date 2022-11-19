@@ -223,6 +223,7 @@ class MoveIt():
         self._ik_start_sec = 0
 
         self._persistent_obstacles = []
+        
         # ----------------- Sample Collision Object -------------------- #
         obstacle_pose1 = geometry_msgs.msg.Pose()
         obstacle_shape1 = shape_msgs.msg.SolidPrimitive()
@@ -942,7 +943,7 @@ class MoveIt():
         # TODO - return some sort of message indicating success or failure
         return
 
-    def update_attached_obstacles(self, attached_object):
+    def update_attached_obstacles(self, attached_object, delete=False):
         """
         Add an attached obstacle 
 
@@ -953,13 +954,20 @@ class MoveIt():
         -------
             none
         """
-        # add object to persistent obstacle list
-        self._persistent_obstacles.append(attached_object.object)
-        # add to planning scene's attached collision object list
-        self._planning_scene.robot_state.attached_collision_objects.append(attached_object)
+        if delete:
+            for i in range(len(self._persistent_obstacles)):
+                if attached_object.obstacle.id == self._persistent_obstacles[i].id:
+                    self._persistent_obstacles.pop(i)
+                    self._planning_scene.robot_state.attached_collision_objects.pop(i)
+                    break
+        else:
+            # add object to persistent obstacle list
+            self._persistent_obstacles.append(attached_object.object)
+            # add to planning scene's attached collision object list
+            self._planning_scene.robot_state.attached_collision_objects.append(attached_object)
         return
 
-    def update_persistent_obstacle(self, obstacle):
+    def update_persistent_obstacle(self, obstacle, delete=False):
         """
         Add an obstacle to the scene that doesn't exist physically
 
@@ -970,8 +978,14 @@ class MoveIt():
         -------
             none
         """
-        # add object to persistent obstacle list
-        self._persistent_obstacles.append(obstacle)
+        if delete:
+            for i in range(len(self._persistent_obstacles)):
+                if obstacle.id == self._persistent_obstacles[i].id:
+                    self._persistent_obstacles.pop(i)
+                    break
+        else:
+            # add object to persistent obstacle list
+            self._persistent_obstacles.append(obstacle)
         return
 
     def get_last_error(self):

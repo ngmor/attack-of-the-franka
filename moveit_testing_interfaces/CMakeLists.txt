@@ -18,6 +18,7 @@ rosidl_generate_interfaces(${PROJECT_NAME}
   "srv/MoveToPosition.srv"
   "srv/MoveToOrientation.srv"
   "srv/UpdateObstacles.srv"
+  "srv/UpdateAttachedObstacles.srv"
   DEPENDENCIES
   geometry_msgs)
 
