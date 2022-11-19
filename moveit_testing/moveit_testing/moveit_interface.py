@@ -217,43 +217,43 @@ class MoveIt():
         self._start_pose = geometry_msgs.msg.Pose()
         self._error = MoveItApiErrors.NO_ERROR
 
-        self._planning_scene = None
+        self._planning_scene = moveit_msgs.msg.PlanningScene()
         self._tf_buffer = Buffer()
         self._tf_listener = TransformListener(self._tf_buffer, self._node)
         self._ik_start_sec = 0
 
         self._persistent_obstacles = []
-        
-        # ----------------- Sample Collision Object -------------------- #
-        obstacle_pose1 = geometry_msgs.msg.Pose()
-        obstacle_shape1 = shape_msgs.msg.SolidPrimitive()
-        self.sample_attached_collision = moveit_msgs.msg.AttachedCollisionObject()
-        self.sample_attached_collision.link_name = 'panda_hand_tcp'
-        self.sample_attached_collision.object.id = 'saber'
 
-        obstacle_pose1.position.x = 0.1
-        obstacle_pose1.position.y = 0.1
-        obstacle_pose1.position.z = 0.3
-        obstacle_pose1.orientation.y = -1.0
-        obstacle_pose1.orientation.w = 1.0
-        self.sample_attached_collision.object.primitive_poses = [obstacle_pose1]
+        # # ----------------- Sample Collision Object -------------------- #
+        # obstacle_pose1 = geometry_msgs.msg.Pose()
+        # obstacle_shape1 = shape_msgs.msg.SolidPrimitive()
+        # self.sample_attached_collision = moveit_msgs.msg.AttachedCollisionObject()
+        # self.sample_attached_collision.link_name = 'panda_hand_tcp'
+        # self.sample_attached_collision.object.id = 'saber'
+
+        # obstacle_pose1.position.x = 0.1
+        # obstacle_pose1.position.y = 0.1
+        # obstacle_pose1.position.z = 0.3
+        # obstacle_pose1.orientation.y = -1.0
+        # obstacle_pose1.orientation.w = 1.0
+        # self.sample_attached_collision.object.primitive_poses = [obstacle_pose1]
         
-        obstacle_shape1.type = 3
-        obstacle_shape1.dimensions = [0.6, 0.05, 0.2]
-        self.sample_attached_collision.object.primitives = [obstacle_shape1]
-        self.sample_attached_collision.object.header.frame_id = 'panda_arm'
-        self.sample_attached_collision.object.header.stamp = self._node.get_clock().now().to_msg()
-        self.sample_attached_collision.object.operation = self.sample_attached_collision.object.ADD
-        # has a detach pose element that is important for end-effector grasping
-        # has weight element to specify for lightsaber down the line
-        attached_object = moveit_msgs.msg.PlanningScene()
-        attached_object.name = 'sample'
-        attached_object.robot_model_name = self.config.base_frame_id
-        attached_object.robot_state.attached_collision_objects = [self.sample_attached_collision]
-        attached_object.world.collision_objects.append(self.sample_attached_collision.object)
-        self._obstacle_pub.publish(attached_object)
-        self._node.get_logger().info("published")
-        # -------------------------------------------------------------- #
+        # obstacle_shape1.type = 3
+        # obstacle_shape1.dimensions = [0.6, 0.05, 0.2]
+        # self.sample_attached_collision.object.primitives = [obstacle_shape1]
+        # self.sample_attached_collision.object.header.frame_id = 'panda_arm'
+        # self.sample_attached_collision.object.header.stamp = self._node.get_clock().now().to_msg()
+        # self.sample_attached_collision.object.operation = self.sample_attached_collision.object.ADD
+        # # has a detach pose element that is important for end-effector grasping
+        # # has weight element to specify for lightsaber down the line
+        # attached_object = moveit_msgs.msg.PlanningScene()
+        # attached_object.name = 'sample'
+        # attached_object.robot_model_name = self.config.base_frame_id
+        # attached_object.robot_state.attached_collision_objects = [self.sample_attached_collision]
+        # attached_object.world.collision_objects.append(self.sample_attached_collision.object)
+        # self._obstacle_pub.publish(attached_object)
+        # self._node.get_logger().info("published")
+        # # -------------------------------------------------------------- #
 
     def handle(self):
         """

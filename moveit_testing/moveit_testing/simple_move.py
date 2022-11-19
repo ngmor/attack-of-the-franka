@@ -443,7 +443,7 @@ class SimpleMove(Node):
 
         obstacle.header.frame_id = self.moveit.config.base_frame_id
 
-        self.moveit.add_persistent_obstacle(obstacle, delete=request.delete_obstacle)
+        self.moveit.update_persistent_obstacle(obstacle, delete=request.delete_obstacle)
 
         return response
 
@@ -455,7 +455,7 @@ class SimpleMove(Node):
 
         Example call:
         ros2 service call /update_attached_obstacles moveit_testing_interfaces/srv/UpdateAttachedObstacles
-            "{position: {x: 0.75, y: 0.5, z: 0.0}, length: 1.0, width: 0.25, height: 4.0,
+            "{link_name: "panda_hand_tcp", position: {x: 0.1, y: 0.1, z: 0.3}, length: 0.6, width: 0.05, height: 0.2,
             id: 'gripping', delete_obstacle: false}"
 
         Args:
@@ -470,20 +470,20 @@ class SimpleMove(Node):
         """
         attached_obstacle = moveit_msgs.msg.AttachedCollisionObject()
         attached_obstacle.link_name = request.link_name
-        attached_obstacle.obstacle.id = request.id
+        attached_obstacle.object.id = request.id
 
         pose = geometry_msgs.msg.Pose()
         pose.position = request.position
-        attached_obstacle.obstacle.primitive_poses = [pose]
+        attached_obstacle.object.primitive_poses = [pose]
 
         shape = shape_msgs.msg.SolidPrimitive()
         shape.type = request.type  # Box
         shape.dimensions = [request.length, request.width, request.height]
-        attached_obstacle.obstacle.primitives = [shape]
+        attached_obstacle.object.primitives = [shape]
 
-        attached_obstacle.obstacle.header.frame_id = self.moveit.config.base_frame_id
+        attached_obstacle.object.header.frame_id = self.moveit.config.base_frame_id
 
-        self.moveit.add_persistent_obstacle(attached_obstacle.obstacle, delete=request.delete_obstacle)
+        self.moveit.update_attached_obstacles(attached_obstacle, delete=request.delete_obstacle)
 
         return response
 
