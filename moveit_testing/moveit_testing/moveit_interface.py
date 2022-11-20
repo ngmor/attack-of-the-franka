@@ -223,6 +223,7 @@ class MoveIt():
         self._ik_start_sec = 0
 
         self._persistent_obstacles = []
+        self._obs_list = []
 
         # # ----------------- Sample Collision Object -------------------- #
         # obstacle_pose1 = geometry_msgs.msg.Pose()
@@ -965,6 +966,7 @@ class MoveIt():
             self._persistent_obstacles.append(attached_object.object)
             # add to planning scene's attached collision object list
             self._planning_scene.robot_state.attached_collision_objects.append(attached_object)
+        self.update_obstacles(self._obs_list, False)
         return
 
     def update_persistent_obstacle(self, obstacle, delete=False):
@@ -986,6 +988,7 @@ class MoveIt():
         else:
             # add object to persistent obstacle list
             self._persistent_obstacles.append(obstacle)
+        self.update_obstacles(self._obs_list, False)
         return
 
     def get_last_error(self):
