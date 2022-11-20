@@ -454,10 +454,9 @@ class SimpleMove(Node):
         Store obstacle position, dimensions, ids and delete flag value input by the user
 
         Example call:
-        ros2 service call /update_attached_obstacles moveit_testing_interfaces/srv/UpdateAttachedObstacles
-            "{link_name: "panda_hand_tcp", position: {x: 0.1, y: 0.1, z: 0.3}, length: 0.6, width: 0.05, height: 0.2,
-            id: 'gripping', delete_obstacle: false}"
-
+        ros2 service call /update_attached_obstacles moveit_testing_interfaces/srv/UpdateAttachedObstacles 
+        "{link_name: "panda_hand_tcp", position: {x: 0.1, y: 0.1, z: 0.3}, length: 0.6, width: 0.05, 
+        height: 0.2, id: 'gripping', type: 3, delete_obstacle: false}"
         Args:
             request (UpdateAttachedObstacles): obstacle information
 

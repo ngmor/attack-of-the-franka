@@ -957,7 +957,7 @@ class MoveIt():
         """
         if delete:
             for i in range(len(self._persistent_obstacles)):
-                if attached_object.obstacle.id == self._persistent_obstacles[i].id:
+                if attached_object.object.id == self._persistent_obstacles[i].id:
                     self._persistent_obstacles.pop(i)
                     self._planning_scene.robot_state.attached_collision_objects.pop(i)
                     break
