@@ -223,6 +223,7 @@ class MoveIt():
         self._ik_start_sec = 0
 
         self._persistent_obstacles = []
+        self._attached_obstacles = []
         self._obs_list = []
 
         # # ----------------- Sample Collision Object -------------------- #
@@ -397,6 +398,9 @@ class MoveIt():
                     moveit_msgs.srv.GetPlanningScene.Request())
             if self.obstacle_future.done():
                 self._planning_scene = copy.deepcopy(self.obstacle_future.result().scene)
+                if self._attached_obstacles:
+                    # add to planning scene's attached collision object list
+                    self._planning_scene.robot_state.attached_collision_objects = self._attached_obstacles
                 # process info
                 self._update_collision_object()
                 self._obs_state = _ObstacleState.PUBLISH
@@ -907,10 +911,16 @@ class MoveIt():
                     # object isn't in list, do whatever you need  to
                     # ADD
                     self._planning_scene.world.collision_objects.append(copy.deepcopy(obstacle))
+                    if self._attached_obstacles:
+                        # add to planning scene's attached collision object list
+                        self._planning_scene.robot_state.attached_collision_objects = self._attached_obstacles
                 else:
                     # object is in list
                     # UPDATE
                     self._planning_scene.world.collision_objects[index] = copy.deepcopy(obstacle)
+                    if self._attached_obstacles:
+                        # add to planning scene's attached collision object list
+                        self._planning_scene.robot_state.attached_collision_objects = self._attached_obstacles
         else:
             for obstacle in self._obs_list:
                 for i in range(len(self._planning_scene.world.collision_objects)):
@@ -959,13 +969,16 @@ class MoveIt():
             for i in range(len(self._persistent_obstacles)):
                 if attached_object.object.id == self._persistent_obstacles[i].id:
                     self._persistent_obstacles.pop(i)
-                    self._planning_scene.robot_state.attached_collision_objects.pop(i)
-                    break
+                    # self._planning_scene.robot_state.attached_collision_objects.pop(i)
+                    # break
+                if attached_object.object.id == self._attached_obstacles[i].object.id:
+                    self._attached_obstacles.pop(i)
         else:
             # add object to persistent obstacle list
             self._persistent_obstacles.append(attached_object.object)
+            self._attached_obstacles.append(attached_object)
             # add to planning scene's attached collision object list
-            self._planning_scene.robot_state.attached_collision_objects.append(attached_object)
+            # self._planning_scene.robot_state.attached_collision_objects.append(attached_object)
         self.update_obstacles(self._obs_list, False)
         return
 
