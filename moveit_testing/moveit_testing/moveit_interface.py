@@ -208,6 +208,7 @@ class MoveIt():
         self.movement_result = moveit_msgs.action.ExecuteTrajectory.Result()
 
         self._move_to_home = False
+        self._waypoint = False
         self._plan_and_execute = False
         self._plan = None
         self._joint_states = sensor_msgs.msg.JointState()
@@ -243,7 +244,7 @@ class MoveIt():
         # obstacle_shape1.type = 3
         # obstacle_shape1.dimensions = [0.6, 0.05, 0.2]
         # self.sample_attached_collision.object.primitives = [obstacle_shape1]
-        # self.sample_attached_collision.object.header.frame_id = 'panda_arm'
+        # self.sample_attached_collision.object.header.frame_id = 'panda_hand_tcp'
         # self.sample_attached_collision.object.header.stamp = self._node.get_clock().now().to_msg()
         # self.sample_attached_collision.object.operation = self.sample_attached_collision.object.ADD
         # # has a detach pose element that is important for end-effector grasping
@@ -251,8 +252,9 @@ class MoveIt():
         # attached_object = moveit_msgs.msg.PlanningScene()
         # attached_object.name = 'sample'
         # attached_object.robot_model_name = self.config.base_frame_id
-        # attached_object.robot_state.attached_collision_objects = [self.sample_attached_collision]
-        # attached_object.world.collision_objects.append(self.sample_attached_collision.object)
+        # #attached_object.robot_state.attached_collision_objects = [self.sample_attached_collision]
+        # attached_object.robot_state.attached_collision_objects.append(self.sample_attached_collision)
+        # #attached_object.world.collision_objects.append(self.sample_attached_collision.object)
         # self._obstacle_pub.publish(attached_object)
         # self._node.get_logger().info("published")
         # # -------------------------------------------------------------- #
@@ -296,6 +298,8 @@ class MoveIt():
                 # Skip IK compute if we're moving to home
                 if self._move_to_home:
                     self._plan_state = _PlanState.WAIT_FOR_READY
+                elif self._waypoint:
+                    self._plan_state = _PlanState.WAIT_FOR_READY
                 # If we specify a custom start state, we need to start with
                 # computing inverse kinematics of that start state
                 elif self._start_pose is not None:
@@ -318,6 +322,7 @@ class MoveIt():
         if self._state != _State.PLANNING:
             self._plan_state = _PlanState.IDLE
             self._move_to_home = False
+            self._waypoint = False
         
         if self._state != _State.EXECUTING:
             self._exec_state = _ExecState.IDLE
@@ -967,15 +972,11 @@ class MoveIt():
         """
         if delete:
             for i in range(len(self._persistent_obstacles)):
-                if attached_object.object.id == self._persistent_obstacles[i].id:
-                    self._persistent_obstacles.pop(i)
-                    # self._planning_scene.robot_state.attached_collision_objects.pop(i)
-                    # break
                 if attached_object.object.id == self._attached_obstacles[i].object.id:
                     self._attached_obstacles.pop(i)
         else:
             # add object to persistent obstacle list
-            self._persistent_obstacles.append(attached_object.object)
+            #self._persistent_obstacles.append(attached_object.object)
             self._attached_obstacles.append(attached_object)
             # add to planning scene's attached collision object list
             # self._planning_scene.robot_state.attached_collision_objects.append(attached_object)
@@ -1018,6 +1019,36 @@ class MoveIt():
             variable of type Enum MoveItApiErrors indicating error state
 
         """
+        return self._error
+
+    def joint_waypoints(self, waypoint):
+        if self._state != _State.IDLE:
+            # return some form of error, we are busy with another task
+            self._error = MoveItApiErrors.NOT_IN_IDLE_STATE
+            return self._error
+        # Check if joint position list is empty
+        # elif not self.config.home_joint_positions:
+        #     self._error = MoveItApiErrors.EMPTY_JOINT_HOME_POSITIONS
+        #     return self._error
+
+        self._start_joint_states = self._joint_states
+        self._start_pose = None
+
+        self._goal_joint_states = copy.deepcopy(self._joint_states)
+        self._goal_joint_states.position = copy.deepcopy(waypoint)
+
+        # Execute immediately after planning
+        self._plan_and_execute = True
+
+        # Skip IK
+        # TODO - may want a more general way of doing this if we want to skip IK for other reasons?
+        #self._move_to_home = True
+        self._waypoint = True
+
+        self._state = _State.PLANNING
+
+        # return some sort of message indicating success or failure
+        self._error = MoveItApiErrors.NO_ERROR
         return self._error
 
 

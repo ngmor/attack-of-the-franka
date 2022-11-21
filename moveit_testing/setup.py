@@ -21,6 +21,7 @@ setup(
     entry_points={
         'console_scripts': [
             'simple_move=moveit_testing.simple_move:simple_move_entry',
+            'move_group=moveit_testing.move_group:movegroup_entry'
         ],
     },
 )
