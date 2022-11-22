@@ -41,3 +41,6 @@ def angle_axis_to_quaternion(theta, axis):
                                         y=normalized[1]*sinTheta2,
                                         z=normalized[2]*sinTheta2,
                                         w=cos(theta/2.0))
+
+# TODO - should this be a parameter?
+WORK_AREA_APRILTAG_SIZE = 0.055 # m

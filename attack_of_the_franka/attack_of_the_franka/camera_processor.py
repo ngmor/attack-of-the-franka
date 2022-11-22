@@ -13,7 +13,8 @@ from tf2_ros import TransformBroadcaster
 from geometry_msgs.msg import TransformStamped
 from tf2_ros.buffer import Buffer
 from tf2_ros.transform_listener import TransformListener
-from attack_of_the_franka.common import FRAMES, angle_axis_to_quaternion, ObjectType
+from attack_of_the_franka.common import FRAMES, angle_axis_to_quaternion, ObjectType, \
+    WORK_AREA_APRILTAG_SIZE
 
 camera_scale_factor = 1.0 / 1000.0
 
@@ -198,6 +199,7 @@ class ContourData():
         transform.transform.translation.x = self.coord.x
         transform.transform.translation.y = self.coord.y
         transform.transform.translation.z = self.coord.z
+        transform.transform.rotation = angle_axis_to_quaternion(-np.pi/2.,[0.,1.,0.])
 
         transform.header.stamp = time
         broadcaster.sendTransform(transform)
@@ -470,19 +472,19 @@ class CameraProcessor(Node):
             self.work_area_limits_y.lower = min(
                 self.tf_camera_to_workspace1.transform.translation.y,
                 self.tf_camera_to_workspace2.transform.translation.y
-            )
+            ) - WORK_AREA_APRILTAG_SIZE / 2.
             self.work_area_limits_y.upper = max(
                 self.tf_camera_to_workspace1.transform.translation.y,
                 self.tf_camera_to_workspace2.transform.translation.y
-            )
+            ) + WORK_AREA_APRILTAG_SIZE / 2.
             self.work_area_limits_z.lower = min(
                 self.tf_camera_to_workspace1.transform.translation.z,
                 self.tf_camera_to_workspace2.transform.translation.z
-            )
+            ) - WORK_AREA_APRILTAG_SIZE / 2.
             self.work_area_limits_z.upper = max(
                 self.tf_camera_to_workspace1.transform.translation.z,
                 self.tf_camera_to_workspace2.transform.translation.z
-            )
+            ) + WORK_AREA_APRILTAG_SIZE / 2.
 
             # Get pixel coordinates to draw on picture
             self.workspace1_pixel.get_from_camera_coordinates(self.intrinsics,self.tf_camera_to_workspace1.transform.translation)
