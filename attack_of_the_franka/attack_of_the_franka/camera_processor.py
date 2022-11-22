@@ -163,12 +163,20 @@ class CameraProcessor(Node):
         self.static_broadcaster = StaticTransformBroadcaster(self)
         self.broadcaster = TransformBroadcaster(self)
 
+        # TODO put frame names into common reference file
         self.apriltag_base = TransformStamped()
-        self.apriltag_base.header.frame_id = "reference_frame"
+        self.apriltag_base.header.frame_id = "robot_table_reference"
         self.apriltag_base.child_frame_id = "panda_link0"
 
-        self.apriltag_base.transform.translation.x = 0.0
-        self.apriltag_base.transform.translation.y = 0.0
+        # Measurements from table:
+        tag_size = 0.173 # m
+        table_width = 0.605 # m
+        x_edge_to_table_edge = 0.023 # m
+        y_edge_to_base = 0.3 # m
+
+
+        self.apriltag_base.transform.translation.x = -(table_width / 2.0 - x_edge_to_table_edge - tag_size / 2.0)
+        self.apriltag_base.transform.translation.y = y_edge_to_base + tag_size / 2.0
         self.apriltag_base.transform.translation.z = 0.0
 
         time = self.get_clock().now().to_msg()
