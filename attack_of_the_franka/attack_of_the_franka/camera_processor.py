@@ -25,8 +25,37 @@ class HSV():
     def to_np_array(self):
         return np.array(self.to_array())
 
+class TrackbarLimits():
+
+    def __init__(self,name,window_name,initial_values,limits, use_trackbar=False):
+        self.name = name
+        self.lower_name = self.name + ' lo'
+        self.upper_name = self.name + ' hi'
+        self.window_name = window_name
+        self.lower = initial_values[0]
+        self.upper = initial_values[1]
+        self.lower_limit = limits[0]
+        self.upper_limit = limits[1]
+
+        if use_trackbar:
+            cv2.createTrackbar(self.lower_name, self.window_name, self.lower,self.upper_limit,self.trackbar_lower)
+            cv2.createTrackbar(self.upper_name, self.window_name, self.upper,self.upper_limit,self.trackbar_upper)
+
+    def trackbar_lower(self, val):
+        self.lower = val
+        self.lower = min(self.upper-1, self.lower)
+        self.lower = max(self.lower,self.lower_limit)
+        cv2.setTrackbarPos(self.lower_name,self.window_name,self.lower)
+
+    def trackbar_upper(self, val):
+        self.upper = val
+        self.upper = max(self.lower+1, self.upper)
+        self.upper = min(self.upper,self.upper_limit)
+        cv2.setTrackbarPos(self.upper_name,self.window_name,self.upper)
+
 class HSVLimits():
     
+    # TODO Refactor to include several trackbar limits classes
     def __init__(self,name,window_name,lower_bounds,upper_bounds,use_trackbar=False):
         self.lower = HSV(lower_bounds[0],lower_bounds[1],lower_bounds[2])
         self.upper = HSV(upper_bounds[0],upper_bounds[1],upper_bounds[2])
@@ -112,6 +141,13 @@ class ContourData():
             self.coord = None
             return
 
+    def centroid_within_bounds(self, x_limits, y_limits):
+        """Return if the centroid is within the input limits."""
+        return ((self.centroid.x >= x_limits.lower) and
+                (self.centroid.x <= x_limits.upper) and
+                (self.centroid.y >= y_limits.lower) and
+                (self.centroid.y <= y_limits.upper))
+
 
 class CameraProcessor(Node):
     """TODO"""
@@ -132,6 +168,13 @@ class CameraProcessor(Node):
         self.declare_parameter("enable_enemy_sliders", False,
                                ParameterDescriptor(description="Enable Enemy HSV sliders"))
         self.enable_enemy_sliders = self.get_parameter("enable_enemy_sliders").get_parameter_value().bool_value
+        self.declare_parameter("enable_filtering_sliders", False,
+                               ParameterDescriptor(description="Enable filtering sliders"))
+        self.enable_filtering_sliders = self.get_parameter("enable_filtering_sliders").get_parameter_value().bool_value
+        self.declare_parameter("enable_work_area_sliders", True,
+                               ParameterDescriptor(description="Enable work area bounds sliders"))
+        self.enable_work_area_sliders = self.get_parameter("enable_work_area_sliders").get_parameter_value().bool_value
+        
 
         self.bridge = CvBridge()
         self.intrinsics = None
@@ -149,10 +192,14 @@ class CameraProcessor(Node):
             cv2.namedWindow(self.enemy_mask_window_name, cv2.WINDOW_NORMAL)
 
         self.filter_kernel = 5
-        cv2.createTrackbar('Kernel', self.color_window_name,self.filter_kernel,50,self.trackbar_filter_kernel)
+        self.area_threshold = 2000
 
-        self.area_threshold = 8000
-        cv2.createTrackbar('Area Threshold', self.color_window_name,self.area_threshold,10000,self.trackbar_area_threshold)
+        if self.enable_filtering_sliders:
+            cv2.createTrackbar('Kernel', self.color_window_name,self.filter_kernel,50,self.trackbar_filter_kernel)
+            cv2.createTrackbar('Area Threshold', self.color_window_name,self.area_threshold,10000,self.trackbar_area_threshold)
+
+        self.x_limits = TrackbarLimits('X',self.color_window_name,[0,1280],[0,1280],self.enable_work_area_sliders)
+        self.y_limits = TrackbarLimits('Y',self.color_window_name,[0,720],[0,720],self.enable_work_area_sliders)
 
         self.contours_filtered_ally = []
         self.contours_filtered_enemy = []
@@ -216,19 +263,25 @@ class CameraProcessor(Node):
         if len(contours_ally) > 0:
             self.contours_filtered_ally = []
 
+            # Iterate through contours to process and filter them
             for contour in contours_ally:
                 if cv2.contourArea(contour) > self.area_threshold:
                     contour_data = ContourData(contour)
-                    self.contours_filtered_ally.append(contour_data)
 
-                    # Only add contour to image if it is valid
+                    # Only add contour to list if it is valid
                     if contour_data.valid:
-                        # Add contours to image
-                        color_image_with_tracking = cv2.drawContours(color_image_with_tracking, [contour_data.contour], 0, (255,0,0), 3)
+                        include_contour = True
 
-                        # Add centroid to color image
-                        color_image_with_tracking = cv2.circle(color_image_with_tracking, (contour_data.centroid.x,contour_data.centroid.y), radius=10, color=(255, 0, 0), thickness=-1)
+                        if self.enable_work_area_sliders and not contour_data.centroid_within_bounds(self.x_limits,self.y_limits):
+                            include_contour = False
 
+                        # TODO add more checks here
+
+                        if include_contour:
+                            self.contours_filtered_ally.append(contour_data)
+
+        # sort contours by x coordinate in image
+        self.contours_filtered_ally.sort(key=lambda contour: contour.centroid.x)
 
         # Threshold HSV image to get only enemy color
         mask_enemy = cv2.inRange(hsv_image,self.enemy_hsv.lower.to_np_array(),self.enemy_hsv.upper.to_np_array())
@@ -246,20 +299,48 @@ class CameraProcessor(Node):
             for contour in contours_enemy:
                 if cv2.contourArea(contour) > self.area_threshold:
                     contour_data = ContourData(contour)
-                    self.contours_filtered_enemy.append(contour_data)
 
-                    # Only add contour to image if it is valid
+                    # Only add contour to list if it is valid
                     if contour_data.valid:
-                        # Add contours to image
-                        color_image_with_tracking = cv2.drawContours(color_image_with_tracking, [contour_data.contour], 0, (0,0,255), 3)
+                        include_contour = True
 
-                        # Add centroid to color image
-                        color_image_with_tracking = cv2.circle(color_image_with_tracking, (contour_data.centroid.x,contour_data.centroid.y), radius=10, color=(0, 0, 255), thickness=-1)
+                        if self.enable_work_area_sliders and not contour_data.centroid_within_bounds(self.x_limits,self.y_limits):
+                            include_contour = False
+
+                        # TODO add more checks here
+
+                        if include_contour:
+                            self.contours_filtered_enemy.append(contour_data)
 
         if self.enable_ally_sliders:
             cv2.imshow(self.ally_mask_window_name,mask_ally)
         if self.enable_enemy_sliders:
             cv2.imshow(self.enemy_mask_window_name, mask_enemy)
+
+        # add contours to image
+        for i, contour in enumerate(self.contours_filtered_ally):
+            # Add contours to image
+            color_image_with_tracking = cv2.drawContours(color_image_with_tracking, [contour.contour], 0, (255,0,0), 3)
+
+            # Add centroid to color image
+            color_image_with_tracking = cv2.circle(color_image_with_tracking, (contour.centroid.x,contour.centroid.y), radius=10, color=(255, 0, 0), thickness=-1)
+
+            color_image_with_tracking = cv2.putText(color_image_with_tracking, f'{i}',(contour.centroid.x - 5,contour.centroid.y + 5),cv2.FONT_HERSHEY_DUPLEX,0.5,(255,255,255))
+
+        # add contours to image
+        for i, contour in enumerate(self.contours_filtered_enemy):
+            # Add contours to image
+            color_image_with_tracking = cv2.drawContours(color_image_with_tracking, [contour.contour], 0, (0,0,255), 3)
+
+            # Add centroid to color image
+            color_image_with_tracking = cv2.circle(color_image_with_tracking, (contour.centroid.x,contour.centroid.y), radius=10, color=(0, 0, 255), thickness=-1)
+
+            color_image_with_tracking = cv2.putText(color_image_with_tracking, f'{i}',(contour.centroid.x - 5,contour.centroid.y + 5),cv2.FONT_HERSHEY_DUPLEX,0.5,(255,255,255))
+
+        # Add work area bounds to image
+        # TODO may change
+        if self.enable_work_area_sliders:
+            color_image_with_tracking = cv2.rectangle(color_image_with_tracking, (self.x_limits.lower,self.y_limits.lower),(self.x_limits.upper,self.y_limits.upper),color=(0, 255, 0), thickness=1)
 
         color_image_with_tracking = cv2.putText(color_image_with_tracking, f'Allies: {len(self.contours_filtered_ally)}',(50,50),cv2.FONT_HERSHEY_DUPLEX,1,(255,0,0))
         color_image_with_tracking = cv2.putText(color_image_with_tracking, f'Enemies: {len(self.contours_filtered_enemy)}',(50,100),cv2.FONT_HERSHEY_DUPLEX,1,(0,0,255))
