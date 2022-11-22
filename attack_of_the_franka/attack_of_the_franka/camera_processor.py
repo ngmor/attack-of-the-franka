@@ -15,9 +15,20 @@ from tf2_ros.buffer import Buffer
 from tf2_ros.transform_listener import TransformListener
 from attack_of_the_franka.common import FRAMES, angle_axis_to_quaternion, ObjectType
 
+camera_scale_factor = 1.0 / 1000.0
+
 class Pixel():
     x = 0
     y = 0
+
+    def get_from_camera_coordinates(self,intrinsics,point):
+        if intrinsics is None:
+            return
+
+        # Project point to pixel, changing frames from the camera frame
+        pixel = rs2.rs2_project_point_to_pixel(intrinsics,[-point.y, -point.z, point.x,])
+        self.x = int(pixel[0])
+        self.y = int(pixel[1])
 
 class Limits():
     lower = 0.
@@ -140,12 +151,10 @@ class ContourData():
             pixel = [self.centroid.x, self.centroid.y]
             position = rs2.rs2_deproject_pixel_to_point(intrinsics,pixel,depth)
 
-            scale_factor = 1.0 / 1000.0
-
             self.coord = geometry_msgs.msg.Point()
-            self.coord.x = position[2] * scale_factor
-            self.coord.y = -position[0] * scale_factor
-            self.coord.z = -position[1] * scale_factor
+            self.coord.x = position[2] * camera_scale_factor
+            self.coord.y = -position[0] * camera_scale_factor
+            self.coord.z = -position[1] * camera_scale_factor
 
         except ValueError as e:
             self.coord = None
@@ -267,6 +276,8 @@ class CameraProcessor(Node):
         self.listener = TransformListener(self.buffer, self)
         self.tf_camera_to_workspace1 = None
         self.tf_camera_to_workspace2 = None
+        self.workspace1_pixel = Pixel()
+        self.workspace2_pixel = Pixel()
         self.work_area_limits_y = Limits()  # color camera frame, from AprilTags
         self.work_area_limits_z = Limits()  # color camera frame, from AprilTags
 
@@ -404,9 +415,11 @@ class CameraProcessor(Node):
             color_image_with_tracking = cv2.putText(color_image_with_tracking, f'{i}',(contour.centroid.x - 5,contour.centroid.y + 5),cv2.FONT_HERSHEY_DUPLEX,0.5,(255,255,255))
 
         # Add work area bounds to image
-        # TODO may change
         if self.enable_work_area_sliders:
             color_image_with_tracking = cv2.rectangle(color_image_with_tracking, (self.x_limits.value.lower,self.y_limits.value.lower),(self.x_limits.value.upper,self.y_limits.value.upper),color=(0, 255, 0), thickness=1)
+        elif self.enable_work_area_apriltags:
+            color_image_with_tracking = cv2.rectangle(color_image_with_tracking, (self.workspace1_pixel.x,self.workspace1_pixel.y),(self.workspace2_pixel.x,self.workspace2_pixel.y),color=(0, 255, 0), thickness=1)
+
 
         color_image_with_tracking = cv2.putText(color_image_with_tracking, f'Allies: {len(self.contours_filtered_ally)}',(50,50),cv2.FONT_HERSHEY_DUPLEX,1,(255,0,0))
         color_image_with_tracking = cv2.putText(color_image_with_tracking, f'Enemies: {len(self.contours_filtered_enemy)}',(50,100),cv2.FONT_HERSHEY_DUPLEX,1,(0,0,255))
@@ -470,6 +483,10 @@ class CameraProcessor(Node):
                 self.tf_camera_to_workspace1.transform.translation.z,
                 self.tf_camera_to_workspace2.transform.translation.z
             )
+
+            # Get pixel coordinates to draw on picture
+            self.workspace1_pixel.get_from_camera_coordinates(self.intrinsics,self.tf_camera_to_workspace1.transform.translation)
+            self.workspace2_pixel.get_from_camera_coordinates(self.intrinsics,self.tf_camera_to_workspace2.transform.translation)
 
 
     def trackbar_filter_kernel(self,val):
