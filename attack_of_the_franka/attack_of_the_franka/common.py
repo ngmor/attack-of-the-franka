@@ -2,6 +2,7 @@
 
 import geometry_msgs.msg
 from math import sqrt, sin, cos
+from enum import Enum,auto
 
 class FRAMES():
     """Frame names."""
@@ -11,7 +12,15 @@ class FRAMES():
     PANDA_TABLE = 'robot_table_reference'
     WORK_TABLE1 = 'work_table_reference1'
     WORK_TABLE2 = 'work_table_reference2'
+    CAMERA_COLOR = 'camera_color_frame'
+    ALLY = 'ally'
+    ENEMY = 'enemy'
 
+class ObjectType(Enum):
+    """Object types"""
+    ALLY = auto(),
+    ENEMY = auto(),
+    
 
 def angle_axis_to_quaternion(theta, axis):
     """

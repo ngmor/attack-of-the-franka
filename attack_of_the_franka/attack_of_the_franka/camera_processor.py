@@ -11,7 +11,7 @@ import geometry_msgs.msg
 from tf2_ros.static_transform_broadcaster import StaticTransformBroadcaster
 from tf2_ros import TransformBroadcaster
 from geometry_msgs.msg import TransformStamped
-from attack_of_the_franka.common import FRAMES, angle_axis_to_quaternion
+from attack_of_the_franka.common import FRAMES, angle_axis_to_quaternion, ObjectType
 
 class HSV():
     def __init__(self,H,S,V):
@@ -122,7 +122,7 @@ class ContourData():
             self.centroid.y = int(self.moments['m01']/self.moments['m00'])
 
     def calc_coord(self,depth_image,intrinsics):
-        """Calculate coordinates from depth image and intrinsics."""
+        """Calculate camera frame coordinates from depth image and intrinsics."""
         if (not self.valid) or not intrinsics:
             self.coord = None
             return
@@ -132,10 +132,12 @@ class ContourData():
             pixel = [self.centroid.x, self.centroid.y]
             position = rs2.rs2_deproject_pixel_to_point(intrinsics,pixel,depth)
 
+            scale_factor = 1.0 / 1000.0
+
             self.coord = geometry_msgs.msg.Point()
-            self.coord.x = position[0]
-            self.coord.y = position[1]
-            self.coord.z = position[2]
+            self.coord.x = position[2] * scale_factor
+            self.coord.y = -position[0] * scale_factor
+            self.coord.z = -position[1] * scale_factor
 
         except ValueError as e:
             self.coord = None
@@ -147,6 +149,28 @@ class ContourData():
                 (self.centroid.x <= x_limits.upper) and
                 (self.centroid.y >= y_limits.lower) and
                 (self.centroid.y <= y_limits.upper))
+
+    def broadcast(self,broadcaster,number,time,object_type):
+        """Broadcast the transform to the frame at the location of the centroid of the contour."""
+        transform = TransformStamped()
+        transform.header.frame_id = FRAMES().CAMERA_COLOR
+
+        if object_type == ObjectType.ALLY:
+            transform.child_frame_id = FRAMES().ALLY
+        elif object_type == ObjectType.ENEMY:
+            transform.child_frame_id = FRAMES().ENEMY
+        else:
+            transform.child_frame_id = ''
+
+
+        transform.child_frame_id += f'{number:02d}'
+
+        transform.transform.translation.x = self.coord.x
+        transform.transform.translation.y = self.coord.y
+        transform.transform.translation.z = self.coord.z
+
+        transform.header.stamp = time
+        broadcaster.sendTransform(transform)
 
 
 class CameraProcessor(Node):
@@ -172,9 +196,18 @@ class CameraProcessor(Node):
                                ParameterDescriptor(description="Enable filtering sliders"))
         self.enable_filtering_sliders = self.get_parameter("enable_filtering_sliders").get_parameter_value().bool_value
         self.declare_parameter("enable_work_area_sliders", True,
-                               ParameterDescriptor(description="Enable work area bounds sliders"))
+                               ParameterDescriptor(description="Enable work area bounds by sliders"))
         self.enable_work_area_sliders = self.get_parameter("enable_work_area_sliders").get_parameter_value().bool_value
+        self.declare_parameter("enable_work_area_apriltags", False,
+                               ParameterDescriptor(description="Enable work area bounds by AprilTags"))
+        self.enable_work_area_apriltags = self.get_parameter("enable_work_area_apriltags").get_parameter_value().bool_value
+        self.declare_parameter("broadcast_transforms_directly", True,
+                               ParameterDescriptor(description="Enable broadcasting of transforms for enemies/allies from this node."))
+        self.broadcast_transforms_directly = self.get_parameter("broadcast_transforms_directly").get_parameter_value().bool_value
         
+        # sliders get precedence over AprilTags
+        if self.enable_work_area_sliders and self.enable_work_area_apriltags:
+            self.enable_work_area_apriltags = False
 
         self.bridge = CvBridge()
         self.intrinsics = None
@@ -198,22 +231,22 @@ class CameraProcessor(Node):
             cv2.createTrackbar('Kernel', self.color_window_name,self.filter_kernel,50,self.trackbar_filter_kernel)
             cv2.createTrackbar('Area Threshold', self.color_window_name,self.area_threshold,10000,self.trackbar_area_threshold)
 
-        self.x_limits = TrackbarLimits('X',self.color_window_name,[0,1280],[0,1280],self.enable_work_area_sliders)
-        self.y_limits = TrackbarLimits('Y',self.color_window_name,[0,720],[0,720],self.enable_work_area_sliders)
+        self.x_limits = TrackbarLimits('X',self.color_window_name,[558,808],[0,1280],self.enable_work_area_sliders)
+        self.y_limits = TrackbarLimits('Y',self.color_window_name,[261,642],[0,720],self.enable_work_area_sliders)
 
         self.contours_filtered_ally = []
         self.contours_filtered_enemy = []
 
         self.ally_hsv = HSVLimits('Ally',self.ally_mask_window_name,[100,57,43],[142,255,255],self.enable_ally_sliders)
-        self.enemy_hsv = HSVLimits('Enemy',self.enemy_mask_window_name,[0,193,90],[9,255,206],self.enable_enemy_sliders)
+        self.enemy_hsv = HSVLimits('Enemy',self.enemy_mask_window_name,[0,193,90],[9,255,255],self.enable_enemy_sliders)
 
         self.static_broadcaster = StaticTransformBroadcaster(self)
         self.broadcaster = TransformBroadcaster(self)
 
         # TODO put frame names into common reference file
-        self.table_apriltag_to_base = TransformStamped()
-        self.table_apriltag_to_base.header.frame_id = FRAMES().PANDA_TABLE
-        self.table_apriltag_to_base.child_frame_id = FRAMES().PANDA_BASE
+        table_apriltag_to_base = TransformStamped()
+        table_apriltag_to_base.header.frame_id = FRAMES().PANDA_TABLE
+        table_apriltag_to_base.child_frame_id = FRAMES().PANDA_BASE
 
         # Measurements from table:
         tag_size = 0.173 # m
@@ -222,14 +255,14 @@ class CameraProcessor(Node):
         y_edge_to_base = 0.3 # m
 
 
-        self.table_apriltag_to_base.transform.translation.x = -(table_width / 2.0 - x_edge_to_table_edge - tag_size / 2.0)
-        self.table_apriltag_to_base.transform.translation.y = y_edge_to_base + tag_size / 2.0
-        self.table_apriltag_to_base.transform.translation.z = 0.0
-        self.table_apriltag_to_base.transform.rotation = angle_axis_to_quaternion(-np.pi/2,[0.,0.,1.])
+        table_apriltag_to_base.transform.translation.x = -(table_width / 2.0 - x_edge_to_table_edge - tag_size / 2.0)
+        table_apriltag_to_base.transform.translation.y = y_edge_to_base + tag_size / 2.0
+        table_apriltag_to_base.transform.translation.z = 0.0
+        table_apriltag_to_base.transform.rotation = angle_axis_to_quaternion(-np.pi/2,[0.,0.,1.])
 
         time = self.get_clock().now().to_msg()
-        self.table_apriltag_to_base.header.stamp = time
-        self.static_broadcaster.sendTransform(self.table_apriltag_to_base)
+        table_apriltag_to_base.header.stamp = time
+        self.static_broadcaster.sendTransform(table_apriltag_to_base)
 
         self.get_logger().info("camera_processor node started")
 
@@ -349,11 +382,19 @@ class CameraProcessor(Node):
 
         # Find real world coordinates of all contours
         if (self.aligned_depth_image is not None) and (self.intrinsics is not None):
-            for contour in self.contours_filtered_ally:
+            time = self.get_clock().now().to_msg()
+
+            for i, contour in enumerate(self.contours_filtered_ally):
                 contour.calc_coord(self.aligned_depth_image,self.intrinsics)
+
+                if self.broadcast_transforms_directly:
+                    contour.broadcast(self.broadcaster,i,time,ObjectType.ALLY)
 
             for contour in self.contours_filtered_enemy:
                 contour.calc_coord(self.aligned_depth_image,self.intrinsics)
+                
+                if self.broadcast_transforms_directly:
+                    contour.broadcast(self.broadcaster,i,time,ObjectType.ENEMY)
 
             # TODO - publish transforms for these coordinates to the camera frame
         
