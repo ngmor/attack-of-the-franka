@@ -12,16 +12,23 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-from launch_ros.substitutions import FindPackageShare
 from launch.substitutions import PathJoinSubstitution
 from launch import LaunchDescription
-from launch.actions import IncludeLaunchDescription
+from launch.actions import IncludeLaunchDescription, DeclareLaunchArgument
+from launch.conditions import IfCondition
+from launch.substitutions import LaunchConfiguration
 from launch.launch_description_sources import PythonLaunchDescriptionSource
 from launch_ros.actions import Node
-
+from launch_ros.substitutions import FindPackageShare
 
 def generate_launch_description():
     return LaunchDescription([
+        DeclareLaunchArgument(
+            name='launch_rviz',
+            default_value='true',
+            choices=['true', 'false'],
+            description='Selects whether or not to launch RVIZ to view transforms.',
+        ),
         IncludeLaunchDescription(
             PythonLaunchDescriptionSource(
                 PathJoinSubstitution([
@@ -43,5 +50,19 @@ def generate_launch_description():
             [FindPackageShare('attack_of_the_franka'), 'apriltag.yaml'])],
             remappings=[('/image_rect', '/camera/color/image_raw'),
                         ('/camera_info', '/camera/color/camera_info'),]
-        )
+        ),
+        # RVIZ node for viewing the robot only
+        Node(
+            package='rviz2',
+            executable='rviz2',
+            output='screen',
+            condition=IfCondition(LaunchConfiguration('launch_rviz')),
+            arguments=[
+                '-d',
+                PathJoinSubstitution([
+                    FindPackageShare('attack_of_the_franka'),
+                    'apriltag.rviz'
+                ])
+            ]
+        ),
     ])
