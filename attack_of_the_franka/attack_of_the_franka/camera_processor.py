@@ -11,7 +11,17 @@ import geometry_msgs.msg
 from tf2_ros.static_transform_broadcaster import StaticTransformBroadcaster
 from tf2_ros import TransformBroadcaster
 from geometry_msgs.msg import TransformStamped
+from tf2_ros.buffer import Buffer
+from tf2_ros.transform_listener import TransformListener
 from attack_of_the_franka.common import FRAMES, angle_axis_to_quaternion, ObjectType
+
+class Pixel():
+    x = 0
+    y = 0
+
+class Limits():
+    lower = 0.
+    upper = 0.
 
 class HSV():
     def __init__(self,H,S,V):
@@ -28,30 +38,32 @@ class HSV():
 class TrackbarLimits():
 
     def __init__(self,name,window_name,initial_values,limits, use_trackbar=False):
-        self.name = name
-        self.lower_name = self.name + ' lo'
-        self.upper_name = self.name + ' hi'
+        self.name = Limits()
+        self.name.lower = name + ' lo'
+        self.name.upper = name + ' hi'
         self.window_name = window_name
-        self.lower = initial_values[0]
-        self.upper = initial_values[1]
-        self.lower_limit = limits[0]
-        self.upper_limit = limits[1]
+        self.value = Limits()
+        self.value.lower = initial_values[0]
+        self.value.upper = initial_values[1]
+        self.limits = Limits()
+        self.limits.lower = limits[0]
+        self.limits.upper = limits[1]
 
         if use_trackbar:
-            cv2.createTrackbar(self.lower_name, self.window_name, self.lower,self.upper_limit,self.trackbar_lower)
-            cv2.createTrackbar(self.upper_name, self.window_name, self.upper,self.upper_limit,self.trackbar_upper)
+            cv2.createTrackbar(self.name.lower, self.window_name, self.value.lower,self.limits.upper,self.trackbar_lower)
+            cv2.createTrackbar(self.name.upper, self.window_name, self.value.upper,self.limits.upper,self.trackbar_upper)
 
     def trackbar_lower(self, val):
-        self.lower = val
-        self.lower = min(self.upper-1, self.lower)
-        self.lower = max(self.lower,self.lower_limit)
-        cv2.setTrackbarPos(self.lower_name,self.window_name,self.lower)
+        self.value.lower = val
+        self.value.lower = min(self.value.upper-1, self.value.lower)
+        self.value.lower = max(self.value.lower,self.limits.lower)
+        cv2.setTrackbarPos(self.name.lower,self.window_name,self.value.lower)
 
     def trackbar_upper(self, val):
-        self.upper = val
-        self.upper = max(self.lower+1, self.upper)
-        self.upper = min(self.upper,self.upper_limit)
-        cv2.setTrackbarPos(self.upper_name,self.window_name,self.upper)
+        self.value.upper = val
+        self.value.upper = max(self.value.lower+1, self.value.upper)
+        self.value.upper = min(self.value.upper,self.limits.upper)
+        cv2.setTrackbarPos(self.name.upper,self.window_name,self.value.upper)
 
 class HSVLimits():
     
@@ -102,10 +114,6 @@ class HSVLimits():
         self.upper.V = max(self.lower.V+1, self.upper.V)
         cv2.setTrackbarPos(self.upper_names.V,self.window_name,self.upper.V)
 
-class Pixel():
-    x = 0
-    y = 0
-
 class ContourData():
     def __init__(self,contour):
         self.contour = contour
@@ -123,7 +131,7 @@ class ContourData():
 
     def calc_coord(self,depth_image,intrinsics):
         """Calculate camera frame coordinates from depth image and intrinsics."""
-        if (not self.valid) or not intrinsics:
+        if (not self.valid) or (depth_image is None) or (intrinsics is None):
             self.coord = None
             return
 
@@ -150,8 +158,21 @@ class ContourData():
                 (self.centroid.y >= y_limits.lower) and
                 (self.centroid.y <= y_limits.upper))
 
+    def coord_within_bounds(self, y_limits, z_limits):
+        """Return if the camera coordinates are within the input limits."""
+        if self.coord is None:
+            return False
+        else:
+            return ((self.coord.y >= y_limits.lower) and
+                    (self.coord.y <= y_limits.upper) and
+                    (self.coord.z >= z_limits.lower) and
+                    (self.coord.z <= z_limits.upper))
+
     def broadcast(self,broadcaster,number,time,object_type):
         """Broadcast the transform to the frame at the location of the centroid of the contour."""
+        if self.coord is None:
+            return
+        
         transform = TransformStamped()
         transform.header.frame_id = FRAMES().CAMERA_COLOR
 
@@ -195,10 +216,10 @@ class CameraProcessor(Node):
         self.declare_parameter("enable_filtering_sliders", False,
                                ParameterDescriptor(description="Enable filtering sliders"))
         self.enable_filtering_sliders = self.get_parameter("enable_filtering_sliders").get_parameter_value().bool_value
-        self.declare_parameter("enable_work_area_sliders", True,
+        self.declare_parameter("enable_work_area_sliders", False,
                                ParameterDescriptor(description="Enable work area bounds by sliders"))
         self.enable_work_area_sliders = self.get_parameter("enable_work_area_sliders").get_parameter_value().bool_value
-        self.declare_parameter("enable_work_area_apriltags", False,
+        self.declare_parameter("enable_work_area_apriltags", True,
                                ParameterDescriptor(description="Enable work area bounds by AprilTags"))
         self.enable_work_area_apriltags = self.get_parameter("enable_work_area_apriltags").get_parameter_value().bool_value
         self.declare_parameter("broadcast_transforms_directly", True,
@@ -242,11 +263,17 @@ class CameraProcessor(Node):
 
         self.static_broadcaster = StaticTransformBroadcaster(self)
         self.broadcaster = TransformBroadcaster(self)
+        self.buffer = Buffer()
+        self.listener = TransformListener(self.buffer, self)
+        self.tf_camera_to_workspace1 = None
+        self.tf_camera_to_workspace2 = None
+        self.work_area_limits_y = Limits()  # color camera frame, from AprilTags
+        self.work_area_limits_z = Limits()  # color camera frame, from AprilTags
 
-        # TODO put frame names into common reference file
-        table_apriltag_to_base = TransformStamped()
-        table_apriltag_to_base.header.frame_id = FRAMES().PANDA_TABLE
-        table_apriltag_to_base.child_frame_id = FRAMES().PANDA_BASE
+        # Publish static transform between AprilTag on robot table and robot base
+        tf_table_apriltag_to_base = TransformStamped()
+        tf_table_apriltag_to_base.header.frame_id = FRAMES().PANDA_TABLE
+        tf_table_apriltag_to_base.child_frame_id = FRAMES().PANDA_BASE
 
         # Measurements from table:
         tag_size = 0.173 # m
@@ -254,25 +281,21 @@ class CameraProcessor(Node):
         x_edge_to_table_edge = 0.023 # m
         y_edge_to_base = 0.3 # m
 
-
-        table_apriltag_to_base.transform.translation.x = -(table_width / 2.0 - x_edge_to_table_edge - tag_size / 2.0)
-        table_apriltag_to_base.transform.translation.y = y_edge_to_base + tag_size / 2.0
-        table_apriltag_to_base.transform.translation.z = 0.0
-        table_apriltag_to_base.transform.rotation = angle_axis_to_quaternion(-np.pi/2,[0.,0.,1.])
+        tf_table_apriltag_to_base.transform.translation.x = -(table_width / 2.0 - x_edge_to_table_edge - tag_size / 2.0)
+        tf_table_apriltag_to_base.transform.translation.y = y_edge_to_base + tag_size / 2.0
+        tf_table_apriltag_to_base.transform.translation.z = 0.0
+        tf_table_apriltag_to_base.transform.rotation = angle_axis_to_quaternion(-np.pi/2,[0.,0.,1.])
 
         time = self.get_clock().now().to_msg()
-        table_apriltag_to_base.header.stamp = time
-        self.static_broadcaster.sendTransform(table_apriltag_to_base)
+        tf_table_apriltag_to_base.header.stamp = time
+        self.static_broadcaster.sendTransform(tf_table_apriltag_to_base)
 
         self.get_logger().info("camera_processor node started")
-
-    def trackbar_filter_kernel(self,val):
-        self.filter_kernel = val
-    def trackbar_area_threshold(self,val):
-        self.area_threshold = val
     
     def timer_callback(self):
         
+        self.get_transforms()
+
         # Can't execute if there isn't a color image yet
         if self.color_image is None:
             return
@@ -305,10 +328,15 @@ class CameraProcessor(Node):
                     if contour_data.valid:
                         include_contour = True
 
-                        if self.enable_work_area_sliders and not contour_data.centroid_within_bounds(self.x_limits,self.y_limits):
-                            include_contour = False
+                        # Find real world coordinates of all contours
+                        contour_data.calc_coord(self.aligned_depth_image,self.intrinsics)
 
-                        # TODO add more checks here
+                        if self.enable_work_area_sliders:
+                            if not contour_data.centroid_within_bounds(self.x_limits.value,self.y_limits.value):
+                                include_contour = False
+                        elif self.enable_work_area_apriltags and self.work_area_apriltags_detected:
+                            if not contour_data.coord_within_bounds(self.work_area_limits_y,self.work_area_limits_z):
+                                include_contour = False
 
                         if include_contour:
                             self.contours_filtered_ally.append(contour_data)
@@ -337,10 +365,15 @@ class CameraProcessor(Node):
                     if contour_data.valid:
                         include_contour = True
 
-                        if self.enable_work_area_sliders and not contour_data.centroid_within_bounds(self.x_limits,self.y_limits):
-                            include_contour = False
+                        # Find real world coordinates of all contours
+                        contour_data.calc_coord(self.aligned_depth_image,self.intrinsics)
 
-                        # TODO add more checks here
+                        if self.enable_work_area_sliders:
+                            if not contour_data.centroid_within_bounds(self.x_limits.value,self.y_limits.value):
+                                include_contour = False
+                        elif self.enable_work_area_apriltags and self.work_area_apriltags_detected:
+                            if not contour_data.coord_within_bounds(self.work_area_limits_y,self.work_area_limits_z):
+                                include_contour = False
 
                         if include_contour:
                             self.contours_filtered_enemy.append(contour_data)
@@ -373,34 +406,77 @@ class CameraProcessor(Node):
         # Add work area bounds to image
         # TODO may change
         if self.enable_work_area_sliders:
-            color_image_with_tracking = cv2.rectangle(color_image_with_tracking, (self.x_limits.lower,self.y_limits.lower),(self.x_limits.upper,self.y_limits.upper),color=(0, 255, 0), thickness=1)
+            color_image_with_tracking = cv2.rectangle(color_image_with_tracking, (self.x_limits.value.lower,self.y_limits.value.lower),(self.x_limits.value.upper,self.y_limits.value.upper),color=(0, 255, 0), thickness=1)
 
         color_image_with_tracking = cv2.putText(color_image_with_tracking, f'Allies: {len(self.contours_filtered_ally)}',(50,50),cv2.FONT_HERSHEY_DUPLEX,1,(255,0,0))
         color_image_with_tracking = cv2.putText(color_image_with_tracking, f'Enemies: {len(self.contours_filtered_enemy)}',(50,100),cv2.FONT_HERSHEY_DUPLEX,1,(0,0,255))
 
         cv2.imshow(self.color_window_name,color_image_with_tracking)
 
-        # Find real world coordinates of all contours
-        if (self.aligned_depth_image is not None) and (self.intrinsics is not None):
+       # Broadcast transforms directly from this node
+        if self.broadcast_transforms_directly:
             time = self.get_clock().now().to_msg()
 
             for i, contour in enumerate(self.contours_filtered_ally):
-                contour.calc_coord(self.aligned_depth_image,self.intrinsics)
-
-                if self.broadcast_transforms_directly:
-                    contour.broadcast(self.broadcaster,i,time,ObjectType.ALLY)
+                contour.broadcast(self.broadcaster,i,time,ObjectType.ALLY)
 
             for contour in self.contours_filtered_enemy:
-                contour.calc_coord(self.aligned_depth_image,self.intrinsics)
-                
-                if self.broadcast_transforms_directly:
-                    contour.broadcast(self.broadcaster,i,time,ObjectType.ENEMY)
-
-            # TODO - publish transforms for these coordinates to the camera frame
+                contour.broadcast(self.broadcaster,i,time,ObjectType.ENEMY)
         
         
         cv2.waitKey(1)
     
+    def get_transforms(self):
+        # Get workspace transformations if possible
+        if self.enable_work_area_apriltags:
+            try:
+                self.tf_camera_to_workspace1 = self.buffer.lookup_transform(
+                    FRAMES().CAMERA_COLOR,
+                    FRAMES().WORK_TABLE1,
+                    rclpy.time.Time()
+                )
+            except Exception:
+                pass
+
+            try:
+                self.tf_camera_to_workspace2 = self.buffer.lookup_transform(
+                    FRAMES().CAMERA_COLOR,
+                    FRAMES().WORK_TABLE2,
+                    rclpy.time.Time()
+                )
+            except Exception:
+                pass
+
+        self.work_area_apriltags_detected = (
+            (self.tf_camera_to_workspace1 is not None) 
+            and (self.tf_camera_to_workspace2 is not None)
+        )
+
+        # Determine bounds from work area AprilTags
+        if self.work_area_apriltags_detected:
+            self.work_area_limits_y.lower = min(
+                self.tf_camera_to_workspace1.transform.translation.y,
+                self.tf_camera_to_workspace2.transform.translation.y
+            )
+            self.work_area_limits_y.upper = max(
+                self.tf_camera_to_workspace1.transform.translation.y,
+                self.tf_camera_to_workspace2.transform.translation.y
+            )
+            self.work_area_limits_z.lower = min(
+                self.tf_camera_to_workspace1.transform.translation.z,
+                self.tf_camera_to_workspace2.transform.translation.z
+            )
+            self.work_area_limits_z.upper = max(
+                self.tf_camera_to_workspace1.transform.translation.z,
+                self.tf_camera_to_workspace2.transform.translation.z
+            )
+
+
+    def trackbar_filter_kernel(self,val):
+        self.filter_kernel = val
+    def trackbar_area_threshold(self,val):
+        self.area_threshold = val
+
     def color_image_callback(self, data):
         try:
             self.color_image = self.bridge.imgmsg_to_cv2(data,desired_encoding='bgr8')
