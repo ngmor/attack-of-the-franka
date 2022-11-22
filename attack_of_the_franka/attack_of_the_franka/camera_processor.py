@@ -11,7 +11,7 @@ import geometry_msgs.msg
 from tf2_ros.static_transform_broadcaster import StaticTransformBroadcaster
 from tf2_ros import TransformBroadcaster
 from geometry_msgs.msg import TransformStamped
-from tf2_ros.buffer import Buffer
+from attack_of_the_franka.common import FRAMES, angle_axis_to_quaternion
 
 class HSV():
     def __init__(self,H,S,V):
@@ -164,9 +164,9 @@ class CameraProcessor(Node):
         self.broadcaster = TransformBroadcaster(self)
 
         # TODO put frame names into common reference file
-        self.apriltag_base = TransformStamped()
-        self.apriltag_base.header.frame_id = "robot_table_reference"
-        self.apriltag_base.child_frame_id = "panda_link0"
+        self.table_apriltag_to_base = TransformStamped()
+        self.table_apriltag_to_base.header.frame_id = FRAMES().PANDA_TABLE
+        self.table_apriltag_to_base.child_frame_id = FRAMES().PANDA_BASE
 
         # Measurements from table:
         tag_size = 0.173 # m
@@ -175,13 +175,14 @@ class CameraProcessor(Node):
         y_edge_to_base = 0.3 # m
 
 
-        self.apriltag_base.transform.translation.x = -(table_width / 2.0 - x_edge_to_table_edge - tag_size / 2.0)
-        self.apriltag_base.transform.translation.y = y_edge_to_base + tag_size / 2.0
-        self.apriltag_base.transform.translation.z = 0.0
+        self.table_apriltag_to_base.transform.translation.x = -(table_width / 2.0 - x_edge_to_table_edge - tag_size / 2.0)
+        self.table_apriltag_to_base.transform.translation.y = y_edge_to_base + tag_size / 2.0
+        self.table_apriltag_to_base.transform.translation.z = 0.0
+        self.table_apriltag_to_base.transform.rotation = angle_axis_to_quaternion(-np.pi/2,[0.,0.,1.])
 
         time = self.get_clock().now().to_msg()
-        self.apriltag_base.header.stamp = time
-        self.static_broadcaster.sendTransform(self.apriltag_base)
+        self.table_apriltag_to_base.header.stamp = time
+        self.static_broadcaster.sendTransform(self.table_apriltag_to_base)
 
         self.get_logger().info("camera_processor node started")
 

@@ -84,14 +84,6 @@ Visualization Manager:
           Value: false
         robot_table_reference:
           Value: true
-        tag36h11:0:
-          Value: false
-        tag36h11:36:
-          Value: false
-        tag36h11:38:
-          Value: false
-        tag36h11:44:
-          Value: false
         work_table_reference1:
           Value: true
         work_table_reference2:
@@ -107,14 +99,6 @@ Visualization Manager:
             camera_color_optical_frame:
               robot_table_reference:
                 {}
-              tag36h11:0:
-                {}
-              tag36h11:36:
-                {}
-              tag36h11:38:
-                {}
-              tag36h11:44:
-                {}
               work_table_reference1:
                 {}
               work_table_reference2:
@@ -127,7 +111,7 @@ Visualization Manager:
   Enabled: true
   Global Options:
     Background Color: 48; 48; 48
-    Fixed Frame: camera_color_frame
+    Fixed Frame: robot_table_reference
     Frame Rate: 30
   Name: root
   Tools:
