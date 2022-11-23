@@ -693,9 +693,9 @@ class MoveGroup(Node):
     def waypoint_poses(self):
         self.waypoints = 1
         point1 = geometry_msgs.msg.Point()
-        point1.x = 0.4
-        point1.y = 0.0
-        point1.z = 0.5
+        point1.x = 0.5
+        point1.y = 0.3
+        point1.z = 0.2
         orientation1 = geometry_msgs.msg.Pose().orientation
         orientation1.x = 1.0
         orientation1.y = 0.0
@@ -707,14 +707,14 @@ class MoveGroup(Node):
         #orientation1.w = 2.0
 
         point2 = geometry_msgs.msg.Point()
-        point2.x = 0.4
-        point2.y = -0.3
-        point2.z = 0.9
+        point2.x = 0.5
+        point2.y = 0.3
+        point2.z = 0.2
         orientation2 = geometry_msgs.msg.Pose().orientation
         orientation2.w = 1.0
 
         point3 = geometry_msgs.msg.Point()
-        point3.x = -0.2
+        point3.x = 0.2
         point3.y = 0.4
         point3.z = 0.8
         orientation3 = geometry_msgs.msg.Pose().orientation
@@ -743,8 +743,8 @@ class MoveGroup(Node):
 
         #points = [point1, point2, point3, point4, point5, point6]
         #orientations = [orientation1, orientation2, orientation3, orientation4, orientation5, orientation6]
-        points = [point1]
-        orientations = [orientation1]
+        points = [point2]
+        orientations = [orientation2]
         self.goal_waypoint = geometry_msgs.msg.Pose()
         #self.goal_pose.position = request.position
         self.goal_waypoint.position  = points[0]

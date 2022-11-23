@@ -227,6 +227,8 @@ class MoveIt():
         self._attached_obstacles = []
         self._obs_list = []
 
+        self._excecution_complete = 0
+
         # # ----------------- Sample Collision Object -------------------- #
         # obstacle_pose1 = geometry_msgs.msg.Pose()
         # obstacle_shape1 = shape_msgs.msg.SolidPrimitive()
@@ -291,6 +293,7 @@ class MoveIt():
             pass
 
         elif self._state == _State.PLANNING:
+            self._excecution_complete = 0
             if new_state:
                 # TODO - this is getting a little messy, might be a good idea to rework it if
                 # possible
@@ -525,6 +528,7 @@ class MoveIt():
                     self._node.get_logger().error(f'Plan error code: {self._plan.error_code.val}')
                 else:
                     self._error = MoveItApiErrors.NO_ERROR
+                    self._excecution_complete = 1
                 # go back to IDLE
                 self._state = _State.IDLE
 
