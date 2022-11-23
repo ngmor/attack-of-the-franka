@@ -1005,7 +1005,10 @@ class MoveIt():
                     break
         else:
             # add object to persistent obstacle list
-            self._persistent_obstacles.append(obstacle)
+            if self._persistent_obstacles:
+                self._persistent_obstacles.append(obstacle)
+            else:
+                self._persistent_obstacles = obstacle
         self.update_obstacles(self._obs_list, False)
         return
 
