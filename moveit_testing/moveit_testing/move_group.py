@@ -71,22 +71,27 @@ class MoveGroup(Node):
 
         self.interval = 1.0 / 100.0
         self.timer = self.create_timer(self.interval, self.timer_callback)
-        self.pub_joint_traj = self.create_publisher(trajectory_msgs.msg.JointTrajectory, 'panda_arm_controller/joint_trajectory', 10)
+        self.pub_joint_traj = self.create_publisher(trajectory_msgs.msg.JointTrajectory,
+                                                    'panda_arm_controller/joint_trajectory', 10)
         self.srv_move_to_home = self.create_service(std_srvs.srv.Empty,
                                                     'move_to_home', self.move_to_home_callback)
         self.grip_open_close = self.create_service(std_srvs.srv.Empty,
-                                                    'grip_open_close', self.grip_open_close_callback)
+                                                    'grip_open_close',
+                                                    self.grip_open_close_callback)
         self.gripper_grasp = self.create_service(std_srvs.srv.Empty,
                                                     'gripper_grasp', self.gripper_grasp_callback)
         self.waypoints = self.create_service(std_srvs.srv.Empty,
                                                     'waypoints', self.waypoint_callback)
         self.test_jointtrajectory = self.create_service(std_srvs.srv.Empty,
-                                                        'test_joint_trajectory', self.test_jointtrajectory_callback)
+                                                        'test_joint_trajectory',
+                                                        self.test_jointtrajectory_callback)
         # self.grip_lightsaber = self.create_service(std_srvs.srv.Empty,
-        #                                              'grip_lightsaber', self.grip_lightsaber_callback)
+        #                                            'grip_lightsaber',
+        #                                            self.grip_lightsaber_callback)
         self.srv_move_to_pose = self.create_service(moveit_testing_interfaces.srv.MoveToPose,
                                                     'move_to_pose', self.move_to_pose_callback)
-        self.test_waypoint_lightsaber = self.create_service(std_srvs.srv.Empty, 'joint_waypoint', self.test_waypoint_lightsaber_callback)
+        self.test_waypoint_lightsaber = self.create_service(std_srvs.srv.Empty, 'joint_waypoint',
+                                                            self.test_waypoint_lightsaber_callback)
         self.srv_move_to_position = self.create_service(
             moveit_testing_interfaces.srv.MoveToPosition,
             'move_to_position', self.move_to_position_callback)
@@ -114,6 +119,8 @@ class MoveGroup(Node):
         self.srv_update_attached_obstacles = self.create_service(
             moveit_testing_interfaces.srv.UpdateAttachedObstacles,
             'update_attached_obstacles', self.attached_obstacles_callback)
+        self.home_waypoint_srv = self.create_service(std_srvs.srv.Empty, 'home_waypoint',
+                                                     self.home_waypoint_callback)
 
 
         # Initialize API class
@@ -165,8 +172,8 @@ class MoveGroup(Node):
             0.7853981633974483,     # panda_joint7
                                     # TODO - This might open the gripper when we try to move home
                                     # CAREFUL!
-            0.035,                  # panda_finger_joint1
-            0.035,                  # panda_finger_joint2
+            0.035,                  # 0.035, 0.0 panda_finger_joint1
+            0.035,                  # 0.035, 0.0 panda_finger_joint2
         ]
 
         self.waypoint_joints = [math.radians(3), math.radians(-35), math.radians(31), math.radians(-111), math.radians(17), math.radians(81), math.radians(77), 0.035, 0.035]
@@ -197,6 +204,8 @@ class MoveGroup(Node):
 
         self.ind = 0
 
+        self.home_waypoint = False
+
 
     def obstacle_info(self):
         """
@@ -208,7 +217,6 @@ class MoveGroup(Node):
         Returns
         -------
             A GetPlanningScene.result (moveit_msgs/srv/GetPlanningScene)
-
         """
         self.obstacle_future = \
             self.obstacle_client.call_async(moveit_msgs.srv.GetPlanningScene.Request())
@@ -218,14 +226,14 @@ class MoveGroup(Node):
 
     def close_gripper(self):
         grip_msg = control_msgs.action.GripperCommand.Goal()
-        grip_msg.command.position = 0.01
+        grip_msg.command.position = 0.0 #0.01
         grip_msg.command.max_effort = 60.0
         if self.pickup_action_client.server_is_ready():
             self.pickup_action_client.send_goal_async(grip_msg)
     
     def open_gripper(self):
         grip_msg = control_msgs.action.GripperCommand.Goal()
-        grip_msg.command.position = 0.04
+        grip_msg.command.position = 0.03    #0.04
         if self.pickup_action_client.server_is_ready():
             self.pickup_action_client.send_goal_async(grip_msg)
 
@@ -271,8 +279,11 @@ class MoveGroup(Node):
             if self.moveit.planning:
                 self.state = State.WAYPOINTS_WAIT
             else:
-                #self.moveit.plan_traj_to_pose(self.goal_waypoint)
-                self.moveit.joint_waypoints(self.waypoint_joints)
+                #add wait for collision object to be in planning scene before plan! (new state?)
+                #self.moveit.check_planning_scene(self.goal_waypoint)
+                # if ___:
+                self.moveit.plan_traj_to_pose(self.goal_waypoint)
+                #self.moveit.joint_waypoints(self.waypoint_joints)
 
         elif self.state == State.WAYPOINTS_WAIT:
             # once we're not planning anymore, get the plan and move on to execute stage
@@ -292,7 +303,10 @@ class MoveGroup(Node):
                     self.state = State.IDLE
 
         elif self.state == State.NEXT_WAYPOINT:
-                if self.ind < self.i:
+                if self.home_waypoint == True:
+                    self.state = State.IDLE
+                    self.home_waypoint = False
+                elif self.ind < self.i:
                     self.ind += 1
                     self.waypoint_poses()
                     self.state = State.WAYPOINTS
@@ -427,14 +441,15 @@ class MoveGroup(Node):
         return response
 
     def gripper_grasp_callback(self, request, response):
+        #Note: might need to command robot to stay up when holding lightsaber
         self.grip_lightsaber_client.wait_for_server()
         if self.grip_lightsaber_client.server_is_ready():
             grip_goal = franka_msgs.action.Grasp.Goal()
-            grip_goal.width = 0.033
+            grip_goal.width = 0.00 #0.033
             grip_goal.epsilon.inner = 0.005
             grip_goal.epsilon.outer = 0.005
             grip_goal.speed = 0.03
-            grip_goal.force = 50.0
+            grip_goal.force = 80.0
             self.grip_lightsaber_client.send_goal_async(grip_goal)
         return response
 
@@ -690,75 +705,99 @@ class MoveGroup(Node):
 
         return response
 
+    def home_waypoint_callback(self, request, response):
+        home_point = geometry_msgs.msg.Point()
+        home_orientation = geometry_msgs.msg.Pose().orientation
+        home_point.x = 0.306891
+        home_point.y = -8.32667e-17
+        home_point.z = 0.486882
+        home_orientation.x = 1.0
+        home_orientation.y = 1.38778e-16
+        home_orientation.z = 2.22045e-16
+        home_orientation.w = -6.93889e-17
+
+        self.goal_home_waypoint = geometry_msgs.msg.Pose()
+        #self.goal_pose.position = request.position
+        self.goal_home_waypoint.position  = home_point
+        self.goal_home_waypoint.orientation = home_orientation
+
+        self.home_waypoint = True
+
+        self.state = State.WAYPOINTS
+
+        return response
+
     def waypoint_poses(self):
         self.waypoints = 1
         point1 = geometry_msgs.msg.Point()
-        point1.x = 0.5
-        point1.y = 0.3
-        point1.z = 0.2
+        point1.x = 0.35
+        point1.y = 0.0
+        point1.z = 0.6
         orientation1 = geometry_msgs.msg.Pose().orientation
-        orientation1.x = 1.0
-        orientation1.y = 0.0
-        orientation1.z = 0.0
-        orientation1.w = 0.0
+        orientation1.x = math.pi
+        # orientation1.y = 0.0
+        # orientation1.z = 0.0
+        # orientation1.w = 0.0
         # orientation1.x = 1.0
         # orientation1.y = 0.5
         # orientation1.z = 0.0
         #orientation1.w = 2.0
 
         point2 = geometry_msgs.msg.Point()
-        point2.x = 0.5
-        point2.y = 0.3
-        point2.z = 0.2
+        point2.x = 0.2
+        point2.y = 0.35
+        point2.z = 0.8
         orientation2 = geometry_msgs.msg.Pose().orientation
-        orientation2.w = 1.0
+        orientation2.x = -1.0
 
         point3 = geometry_msgs.msg.Point()
-        point3.x = 0.2
-        point3.y = 0.4
-        point3.z = 0.8
+        point3.x = -0.1
+        point3.y = 0.35
+        point3.z = 0.7
         orientation3 = geometry_msgs.msg.Pose().orientation
-        orientation3.w = 1.0
+        orientation3.x = -1.0
 
         point4 = geometry_msgs.msg.Point()
-        point4.x = -0.1
-        point4.y = -0.2
+        point4.x = -0.3
+        point4.y = 0.0
         point4.z = 0.8
         orientation4 = geometry_msgs.msg.Pose().orientation
         orientation4.w = 1.0
 
         point5 = geometry_msgs.msg.Point()
-        point5.x = -0.1
-        point5.y = 0.3
+        point5.x = -0.3
+        point5.y = -0.3
         point5.z = 0.9
         orientation5 = geometry_msgs.msg.Pose().orientation
-        orientation5.w = 1.0
+        orientation5.x = 1.0
 
         point6 = geometry_msgs.msg.Point()
-        point6.x = 0.5
-        point6.y = 0.4
+        point6.x = 0.3
+        point6.y = -0.4
         point6.z = 0.5
         orientation6 = geometry_msgs.msg.Pose().orientation
-        orientation6.w = 1.0
+        orientation6.x = math.pi
 
-        #points = [point1, point2, point3, point4, point5, point6]
-        #orientations = [orientation1, orientation2, orientation3, orientation4, orientation5, orientation6]
-        points = [point2]
-        orientations = [orientation2]
+        points = [point1, point2, point3, point4, point5, point6]
+        orientations = [orientation1, orientation2, orientation3, orientation4, orientation5, orientation6]
+        #points = [point1, point2]
+        #orientations = [orientation1, orientation2]
         self.goal_waypoint = geometry_msgs.msg.Pose()
         #self.goal_pose.position = request.position
-        self.goal_waypoint.position  = points[0]
-        self.goal_waypoint.orientation = orientations[0]
+        # self.goal_waypoint.position  = points[0]
+        # self.goal_waypoint.orientation = orientations[0]
         self.flag = 1
         self.i = len(points)
         self.state = State.WAYPOINTS
         i = self.ind
-        for i in range(1, len(points)):
+       # for i in range(1, len(points)):
+        if i < len(points):
             if self.moveit._excecution_complete == 1:
                 self.goal_waypoint = geometry_msgs.msg.Pose()
                 #self.goal_pose.position = request.position
                 self.goal_waypoint.position  = points[i]
                 self.goal_waypoint.orientation = orientations[i]
+                self.get_logger().info(f'point index: {i}')
                 self.flag = 1
                 self.state = State.WAYPOINTS
             else:
@@ -803,9 +842,8 @@ class MoveGroup(Node):
         Store obstacle position, dimensions, id and delete flag value input by the user
 
         Example call:
-        ros2 service call /update_obstacles moveit_testing_interfaces/srv/UpdateObstacles
-            "{position: {x: 0.5, y: 0.5, z: 1.0}, length: 0.5, width: 0.25, height: 2.0,
-            id: 'MyBox', delete_obstacle: false}"
+        ros2 service call /update_obstacles moveit_testing_interfaces/srv/UpdateObstacles "{position: {x: 0.5, y: 0.5, z: 1.0}, length: 0.5, width: 0.25, height: 2.0, id: 'MyBox', delete_obstacle: false}"
+        ros2 service call /update_obstacles moveit_testing_interfaces/srv/UpdateObstacles "{position: {x: 0.5, y: 0.0, z: 0.0}, length: 1.125, width: 0.033, height: 0.2, id: 'gripping', delete_obstacle: false}"
 
         Args:
             request (UpdateObstacles): obstacle information
@@ -825,7 +863,8 @@ class MoveGroup(Node):
         obstacle.primitive_poses = [pose]
 
         shape = shape_msgs.msg.SolidPrimitive()
-        shape.type = 1  # Box
+        #shape.type = 1  # Box
+        shape.type = 3  # Cylinder
         shape.dimensions = [request.length, request.width, request.height]
         obstacle.primitives = [shape]
 

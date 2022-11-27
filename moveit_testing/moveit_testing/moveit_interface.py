@@ -84,8 +84,7 @@ class _State(Enum):
 
     IDLE = auto(),
     PLANNING = auto(),
-    EXECUTING = auto()
-
+    EXECUTING = auto(),
 
 class _PlanState(Enum):
     """Planning states, part of main state machine."""
@@ -141,7 +140,7 @@ class MoveConfig():
     allowed_planning_time = 5.0
     max_velocity_scaling_factor = 0.1
     max_acceleration_scaling_factor = 0.1
-    tolerance = 0.001
+    tolerance = 0.001 #0.1
     home_joint_positions = []  # Must be in the same order as in the joint state message
                                # TODO - improve? also input joint names?
 
@@ -228,6 +227,8 @@ class MoveIt():
         self._obs_list = []
 
         self._excecution_complete = 0
+
+        self.check_obstacles = 0
 
         # # ----------------- Sample Collision Object -------------------- #
         # obstacle_pose1 = geometry_msgs.msg.Pose()
@@ -407,6 +408,14 @@ class MoveIt():
             if self.obstacle_future.done():
                 self._planning_scene = copy.deepcopy(self.obstacle_future.result().scene)
                 if self._attached_obstacles:
+                    self._node.get_logger().info(
+                    f"Attached obstacles message {self._planning_scene.robot_state}")
+                    self._node.get_logger().info(
+                    f"Length of attached obstacles message {len(self._planning_scene.robot_state.attached_collision_objects)}")
+                    # self._node.get_logger().info(
+                    # f"First element of attached obstacles message {self._planning_scene.robot_state.attached_collision_objects[0]}")
+                    # self._node.get_logger().info(
+                    # f"Second element of attached obstacles message {self._planning_scene.robot_state.attached_collision_objects[1]}")
                     # add to planning scene's attached collision object list
                     self._planning_scene.robot_state.attached_collision_objects = self._attached_obstacles
                 # process info
@@ -504,7 +513,7 @@ class MoveIt():
             if self._move_action_client.server_is_ready():
                 # send the goal plan through the move action client
                 self._plan_future = \
-                    self._move_action_client.send_goal_async(self._assemble_plan_message())
+                    self._move_action_client.send_goal_async(self._assemble_plan_message(self._attached_obstacles))
                 self._plan_state = _PlanState.WAIT_FOR_PLAN_ACK
         elif self._plan_state == _PlanState.WAIT_FOR_PLAN_ACK:
             # once that future object.done() returns true,
@@ -832,7 +841,7 @@ class MoveIt():
 
         self._ik_start_sec = self._node.get_clock().now().seconds_nanoseconds()[0]
 
-    def _assemble_plan_message(self):
+    def _assemble_plan_message(self, attached_collision_objects):
         """
         Generate plan request message from start position to goal pose.
 
@@ -854,6 +863,7 @@ class MoveIt():
         assemble_msg.request.workspace_parameters.min_corner = self.config.workspace_min_corner
         assemble_msg.request.workspace_parameters.max_corner = self.config.workspace_max_corner
         assemble_msg.request.start_state.joint_state = self._start_joint_states
+        assemble_msg.request.start_state.attached_collision_objects = attached_collision_objects
 
         # Get from compute ik
         assemble_msg.request.goal_constraints = \
@@ -957,7 +967,8 @@ class MoveIt():
         self._obs_state = _ObstacleState.WAIT_FOR_READY
         # if self._persistent_obstacle is not empty, append to obstacle_list
         if self._persistent_obstacles:
-            obstacle_list.extend(self._persistent_obstacles)
+            #obstacle_list.extend(self._persistent_obstacles)
+            obstacle_list.append(self._persistent_obstacles)
         self._obs_list = obstacle_list
         self._delete_obs = delete
         # TODO - return some sort of message indicating success or failure
@@ -1058,6 +1069,23 @@ class MoveIt():
         self._error = MoveItApiErrors.NO_ERROR
         return self._error
 
+
+    def check_planning_scene(self, goal_waypoint):
+        
+        # self.obstacle_future = self.obstacle_client.call_async(
+        #             moveit_msgs.srv.GetPlanningScene.Request())
+        # if self.obstacle_future.done():
+        #     self._planning_scene = copy.deepcopy(self.obstacle_future.result().scene)
+        #     if self._attached_obstacles:
+        #         self._node.get_logger().info(
+        #         f"Attached obstacles message {self._planning_scene.robot_state}")
+        #         self._node.get_logger().info(
+        #         f"Length of attached obstacles message {len(self._planning_scene.robot_state.attached_collision_objects)}")
+                # self._node.get_logger().info(
+                # f"First element of attached obstacles message {self._planning_scene.robot_state.attached_collision_objects[0]}")
+                # self._node.get_logger().info(
+                # f"Second element of attached obstacles message {self._planning_scene.robot_state.attached_collision_objects[1]}")
+        return
 
 def _joint_states_to_goal_constraints(joint_state, tolerance):
     """
