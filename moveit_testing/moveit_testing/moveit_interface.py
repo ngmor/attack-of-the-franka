@@ -401,6 +401,9 @@ class MoveIt():
         if self._obs_state == _ObstacleState.IDLE:
             pass
 
+            # test = moveit_msgs.srv.ApplyPlanningScene(diff_scene)
+            # test1 = 
+
         elif self._obs_state == _ObstacleState.WAIT_FOR_READY:
             if new_state:
                 self.obstacle_future = self.obstacle_client.call_async(
@@ -418,6 +421,10 @@ class MoveIt():
                     # f"Second element of attached obstacles message {self._planning_scene.robot_state.attached_collision_objects[1]}")
                     # add to planning scene's attached collision object list
                     self._planning_scene.robot_state.attached_collision_objects = self._attached_obstacles
+                    # attached_obstacle = moveit_msgs.msg.CollisionObject()
+                    # attached_obstacle = self._attached_obstacles
+                    # self._planning_scene.world.collision_objects.append(attached_obstacle)
+                    self._planning_scene.is_diff = True
                 # process info
                 self._update_collision_object()
                 self._obs_state = _ObstacleState.PUBLISH
@@ -855,6 +862,7 @@ class MoveIt():
 
         """
         assemble_msg = moveit_msgs.action.MoveGroup.Goal()
+
         header = std_msgs.msg.Header()
         header.frame_id = self.config.base_frame_id
         header.stamp = self._node.get_clock().now().to_msg()
@@ -863,7 +871,19 @@ class MoveIt():
         assemble_msg.request.workspace_parameters.min_corner = self.config.workspace_min_corner
         assemble_msg.request.workspace_parameters.max_corner = self.config.workspace_max_corner
         assemble_msg.request.start_state.joint_state = self._start_joint_states
-        assemble_msg.request.start_state.attached_collision_objects = attached_collision_objects
+       # assemble_msg.request.start_state.attached_collision_objects = attached_collision_objects
+       # assemble_msg.planning_options.planning_scene_diff.
+       # assemble_msg.planning_options.planning_scene_diff.robot_state.attached_collision_objects = attached_collision_objects
+        
+        if len(attached_collision_objects) >= 1:
+            assemble_msg.planning_options.planning_scene_diff.allowed_collision_matrix.entry_values.append(('panda_rightfinger', 'gripper2', True))
+            assemble_msg.planning_options.planning_scene_diff.allowed_collision_matrix.entry_values.append(('panda_leftfinger', 'gripper2', True))
+            assemble_msg.planning_options.planning_scene_diff.allowed_collision_matrix.entry_values.append(('panda_hand_tcp', 'gripper2', True))
+            assemble_msg.planning_options.planning_scene_diff.allowed_collision_matrix.entry_values.append(('panda_hand', 'gripper2', True))
+
+            attached_obj = moveit_msgs.msg.AttachedCollisionObject()
+            attached_obj = attached_collision_objects[0]
+            assemble_msg.planning_options.planning_scene_diff.robot_state.attached_collision_objects.append(attached_collision_objects)
 
         # Get from compute ik
         assemble_msg.request.goal_constraints = \
