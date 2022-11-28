@@ -236,7 +236,12 @@ class CameraProcessor(Node):
         self.declare_parameter("broadcast_transforms_directly", True,
                                ParameterDescriptor(description="Enable broadcasting of transforms for enemies/allies from this node."))
         self.broadcast_transforms_directly = self.get_parameter("broadcast_transforms_directly").get_parameter_value().bool_value
-        
+
+        self.declare_parameter("sort_by_x", False,
+                               ParameterDescriptor(description="sorts the allies and enemies in x"))
+        self.sort_by_x = self.get_parameter("sort_by_x").get_parameter_value().bool_value
+    
+
         # sliders get precedence over AprilTags
         if self.enable_work_area_sliders and self.enable_work_area_apriltags:
             self.enable_work_area_apriltags = False
@@ -269,7 +274,7 @@ class CameraProcessor(Node):
         self.contours_filtered_ally = []
         self.contours_filtered_enemy = []
 
-        self.ally_hsv = HSVLimits('Ally',self.ally_mask_window_name,[100,57,43],[142,255,255],self.enable_ally_sliders)
+        self.ally_hsv = HSVLimits('Ally',self.ally_mask_window_name,[100,57,120],[142,255,255],self.enable_ally_sliders)
         self.enemy_hsv = HSVLimits('Enemy',self.enemy_mask_window_name,[0,193,90],[9,255,255],self.enable_enemy_sliders)
 
         self.static_broadcaster = StaticTransformBroadcaster(self)
@@ -298,6 +303,8 @@ class CameraProcessor(Node):
         tf_table_apriltag_to_base.transform.translation.y = y_edge_to_base + tag_size / 2.0
         tf_table_apriltag_to_base.transform.translation.z = 0.0
         tf_table_apriltag_to_base.transform.rotation = angle_axis_to_quaternion(-np.pi/2,[0.,0.,1.])
+
+        
 
         time = self.get_clock().now().to_msg()
         tf_table_apriltag_to_base.header.stamp = time
@@ -354,8 +361,12 @@ class CameraProcessor(Node):
                         if include_contour:
                             self.contours_filtered_ally.append(contour_data)
 
-        # sort contours by x coordinate in image
-        self.contours_filtered_ally.sort(key=lambda contour: contour.centroid.x)
+        # sort contours by x or y coordinate in image
+        if self.sort_by_x:
+            self.contours_filtered_ally.sort(key=lambda contour: contour.centroid.x)
+        else:
+            self.contours_filtered_ally.sort(key=lambda contour: contour.centroid.y)
+
 
         # Threshold HSV image to get only enemy color
         mask_enemy = cv2.inRange(hsv_image,self.enemy_hsv.lower.to_np_array(),self.enemy_hsv.upper.to_np_array())
@@ -390,6 +401,13 @@ class CameraProcessor(Node):
 
                         if include_contour:
                             self.contours_filtered_enemy.append(contour_data)
+
+        # sort contours by x or y coordinate in image
+        if self.sort_by_x:
+            self.contours_filtered_enemy.sort(key=lambda contour: contour.centroid.x)
+        else:
+            self.contours_filtered_enemy.sort(key=lambda contour: contour.centroid.y)
+
 
         if self.enable_ally_sliders:
             cv2.imshow(self.ally_mask_window_name,mask_ally)
