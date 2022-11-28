@@ -1005,7 +1005,7 @@ class MoveIt():
         # if self._persistent_obstacle is not empty, append to obstacle_list
         if self._persistent_obstacles:
             #obstacle_list.extend(self._persistent_obstacles)
-            obstacle_list.append(self._persistent_obstacles)
+            obstacle_list.extend(self._persistent_obstacles)
         self._obs_list = obstacle_list
         self._delete_obs = delete
         # TODO - return some sort of message indicating success or failure
@@ -1034,6 +1034,31 @@ class MoveIt():
             # self._planning_scene.robot_state.attached_collision_objects.append(attached_object)
         self.update_obstacles(self._obs_list, False)
         return
+
+    # def update_persistent_obstacle(self, obstacle, delete=False):
+    #     """
+    #     Add an obstacle to the scene that doesn't exist physically
+
+    #     Args:
+    #         obstacle: object of type moveit_msgs.msg.CollisionObject()
+    #                   to add to the Planning Scene
+    #     Returns
+    #     -------
+    #         none
+    #     """
+    #     if delete:
+    #         for i in range(len(self._persistent_obstacles)):
+    #             if obstacle.id == self._persistent_obstacles[i].id:
+    #                 self._persistent_obstacles.pop(i)
+    #                 break
+    #     else:
+    #         # add object to persistent obstacle list
+    #         if self._persistent_obstacles:
+    #             self._persistent_obstacles.append(obstacle)
+    #         else:
+    #             self._persistent_obstacles = obstacle
+    #     self.update_obstacles(self._obs_list, False)
+    #     return
 
     def update_persistent_obstacle(self, obstacle, delete=False):
         """
