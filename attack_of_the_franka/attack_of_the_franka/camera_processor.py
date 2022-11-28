@@ -453,7 +453,7 @@ class CameraProcessor(Node):
             for i, contour in enumerate(self.contours_filtered_ally):
                 contour.broadcast(self.broadcaster,i,time,ObjectType.ALLY)
 
-            for contour in self.contours_filtered_enemy:
+            for i, contour in enumerate(self.contours_filtered_enemy):
                 contour.broadcast(self.broadcaster,i,time,ObjectType.ENEMY)
         
         

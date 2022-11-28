@@ -38,7 +38,7 @@ def generate_launch_description():
                 ])
             ),
             launch_arguments=[
-                ('depth_mdoule.profile', '1280x720x30'),
+                ('depth_module.profile', '1280x720x30'),
                 ('align_depth.enable', 'true'),
                 ('pointcloud.enable', 'true'),
             ]
