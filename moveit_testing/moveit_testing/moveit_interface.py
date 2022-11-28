@@ -187,6 +187,7 @@ class MoveIt():
             moveit_msgs.srv.GetPlanningScene, 'get_planning_scene')
         self.sub_joint_states = self._node.create_subscription(
             sensor_msgs.msg.JointState, '/joint_states', self._sub_joint_state_callback, 10)
+        self.pub_planning_scene = self._node.create_publisher(moveit_msgs.msg.PlanningScene, '/planning_scene', 10)
 
         # TODO - other initialization that needs to happen
         self._plan_future = Future()
@@ -876,14 +877,30 @@ class MoveIt():
        # assemble_msg.planning_options.planning_scene_diff.robot_state.attached_collision_objects = attached_collision_objects
         
         if len(attached_collision_objects) >= 1:
-            assemble_msg.planning_options.planning_scene_diff.allowed_collision_matrix.entry_values.append(('panda_rightfinger', 'gripper2', True))
-            assemble_msg.planning_options.planning_scene_diff.allowed_collision_matrix.entry_values.append(('panda_leftfinger', 'gripper2', True))
-            assemble_msg.planning_options.planning_scene_diff.allowed_collision_matrix.entry_values.append(('panda_hand_tcp', 'gripper2', True))
-            assemble_msg.planning_options.planning_scene_diff.allowed_collision_matrix.entry_values.append(('panda_hand', 'gripper2', True))
+            #acm = moveit_msgs.msg.AllowedCollisionMatrix()
+            assemble_msg.request.start_state.is_diff = True
+            # assemble_msg.planning_options.planning_scene_diff.allowed_collision_matrix.entry_values.append(('panda_rightfinger', 'gripping', True))
+            # assemble_msg.planning_options.planning_scene_diff.allowed_collision_matrix.entry_values.append(('panda_leftfinger', 'gripping', True))
+            # assemble_msg.planning_options.planning_scene_diff.allowed_collision_matrix.entry_values.append(('panda_hand_tcp', 'gripping', True))
+            # assemble_msg.planning_options.planning_scene_diff.allowed_collision_matrix.entry_values.append(('panda_hand', 'gripping', True))
+
+            collision_obj = moveit_msgs.msg.CollisionObject()
+            collision_obj = attached_collision_objects[0].object
 
             attached_obj = moveit_msgs.msg.AttachedCollisionObject()
             attached_obj = attached_collision_objects[0]
-            assemble_msg.planning_options.planning_scene_diff.robot_state.attached_collision_objects.append(attached_collision_objects)
+            assemble_msg.planning_options.planning_scene_diff.robot_state.attached_collision_objects.append(attached_obj)
+
+            planning_scene = moveit_msgs.msg.PlanningScene()
+            #planning_scene.world.collision_objects.append(collision_obj)
+            # planning_scene.allowed_collision_matrix.entry_values.append(('panda_rightfinger', 'gripping', True))
+            # planning_scene.allowed_collision_matrix.entry_values.append(('panda_leftfinger', 'gripping', True))
+            # planning_scene.allowed_collision_matrix.entry_values.append(('panda_hand_tcp', 'gripping', True))
+            # planning_scene.allowed_collision_matrix.entry_values.append(('panda_hand', 'gripping', True))
+            planning_scene.robot_state.attached_collision_objects.append(attached_obj)
+            planning_scene.is_diff = True
+
+            self.pub_planning_scene.publish(planning_scene)
 
         # Get from compute ik
         assemble_msg.request.goal_constraints = \
