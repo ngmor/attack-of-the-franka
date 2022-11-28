@@ -1,0 +1,21 @@
+repositories:
+  src/apriltag/apriltag:
+    type: git
+    url: git@github.com:AprilRobotics/apriltag.git
+    version: master
+  src/apriltag/apriltag_msgs:
+    type: git
+    url: git@github.com:christianrauch/apriltag_msgs.git
+    version: master
+  src/apriltag/apriltag_ros:
+    type: git
+    url: git@github.com:christianrauch/apriltag_ros.git
+    version: master
+  src/attack-of-the-franka:
+    type: git
+    url: git@github.com:ngmor/attack-of-the-franka.git
+    version: main
+  src/hw3group-attackofthefranka:
+    type: git
+    url: git@github.com:ME495-EmbeddedSystems/hw3group-attackofthefranka.git
+    version: main
