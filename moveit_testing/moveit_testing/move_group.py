@@ -772,7 +772,7 @@ class MoveGroup(Node):
         orientation5.x = 1.0
 
         point6 = geometry_msgs.msg.Point()
-        point6.x = 0.3
+        point6.x = -0.3
         point6.y = -0.4
         point6.z = 0.5
         orientation6 = geometry_msgs.msg.Pose().orientation
