@@ -956,19 +956,76 @@ class MoveGroup(Node):
 
         return response
 
+    # def add_walls_callback(self, request, response):
+    #     obstacle = moveit_msgs.msg.CollisionObject()
+    #     obstacle.id = 'wall_0'
+
+    #     pose = geometry_msgs.msg.Pose()
+    #     pose.position.x = 0.75
+    #     pose.position.y = 0.75
+    #     pose.position.z = 0.0
+    #     obstacle.primitive_poses = [pose]
+
+    #     shape = shape_msgs.msg.SolidPrimitive()
+    #     shape.type = 1  # Box
+    #     shape.dimensions = [1.125, 0.25, 2.0]
+    #     obstacle.primitives = [shape]
+
+    #     obstacle.header.frame_id = self.moveit.config.base_frame_id
+    #     # self.moveit.update_persistent_obstacle(obstacle, delete=False)
+
+    #     obstacle1 = moveit_msgs.msg.CollisionObject()
+    #     obstacle1.id = 'wall_1'
+
+    #     pose1 = geometry_msgs.msg.Pose()
+    #     pose1.position.x = 0.75
+    #     pose1.position.y = -0.75
+    #     pose1.position.z = 0.0
+    #     obstacle1.primitive_poses = [pose1]
+
+    #     shape1 = shape_msgs.msg.SolidPrimitive()
+    #     shape1.type = 1  # Box
+    #     shape1.dimensions = [1.125, 0.25, 2.0]
+    #     obstacle1.primitives = [shape1]
+
+    #     obstacle1.header.frame_id = self.moveit.config.base_frame_id
+    #     # self.moveit.update_persistent_obstacle(obstacle1, delete=False)
+
+    #     obstacle2 = moveit_msgs.msg.CollisionObject()
+    #     obstacle2.id = 'wall_2'
+
+    #     pose2 = geometry_msgs.msg.Pose()
+    #     pose2.position.x = -0.75
+    #     pose2.position.y = 0.0
+    #     pose2.position.z = 0.0
+    #     obstacle2.primitive_poses = [pose2]
+
+    #     shape2 = shape_msgs.msg.SolidPrimitive()
+    #     shape2.type = 1  # Box
+    #     shape2.dimensions = [0.25, 1.125, 2.0]
+    #     obstacle2.primitives = [shape2]
+
+    #     obstacle2.header.frame_id = self.moveit.config.base_frame_id
+    #     # self.moveit.update_persistent_obstacle(obstacle2, delete=False)
+
+    #     self.moveit.update_persistent_obstacle([obstacle, obstacle1, obstacle2], delete=False)
+
+    #     return response
+
     def add_walls_callback(self, request, response):
+
         obstacle = moveit_msgs.msg.CollisionObject()
         obstacle.id = 'wall_0'
 
         pose = geometry_msgs.msg.Pose()
-        pose.position.x = 0.75
+        pose.position.x = 0.25
         pose.position.y = 0.75
         pose.position.z = 0.0
         obstacle.primitive_poses = [pose]
 
         shape = shape_msgs.msg.SolidPrimitive()
         shape.type = 1  # Box
-        shape.dimensions = [1.125, 0.25, 2.0]
+        shape.dimensions = [3.0, 0.25, 1.0]
         obstacle.primitives = [shape]
 
         obstacle.header.frame_id = self.moveit.config.base_frame_id
@@ -978,37 +1035,69 @@ class MoveGroup(Node):
         obstacle1.id = 'wall_1'
 
         pose1 = geometry_msgs.msg.Pose()
-        pose1.position.x = 0.75
+        pose1.position.x = 0.25
         pose1.position.y = -0.75
         pose1.position.z = 0.0
         obstacle1.primitive_poses = [pose1]
 
         shape1 = shape_msgs.msg.SolidPrimitive()
         shape1.type = 1  # Box
-        shape1.dimensions = [1.125, 0.25, 2.0]
+        shape1.dimensions = [3.0, 0.25, 1.0]
         obstacle1.primitives = [shape1]
 
         obstacle1.header.frame_id = self.moveit.config.base_frame_id
         # self.moveit.update_persistent_obstacle(obstacle1, delete=False)
 
         obstacle2 = moveit_msgs.msg.CollisionObject()
-        obstacle2.id = 'wall_2'
+        obstacle2.id = 'arm_table'
 
         pose2 = geometry_msgs.msg.Pose()
-        pose2.position.x = -0.75
+        pose2.position.x = 0.0
         pose2.position.y = 0.0
         pose2.position.z = 0.0
         obstacle2.primitive_poses = [pose2]
 
         shape2 = shape_msgs.msg.SolidPrimitive()
         shape2.type = 1  # Box
-        shape2.dimensions = [0.25, 1.125, 2.0]
+        shape2.dimensions = [0.605, 0.3, 0.023]
         obstacle2.primitives = [shape2]
 
         obstacle2.header.frame_id = self.moveit.config.base_frame_id
         # self.moveit.update_persistent_obstacle(obstacle2, delete=False)
 
-        self.moveit.update_persistent_obstacle([obstacle, obstacle1, obstacle2], delete=False)
+        obstacle3 = moveit_msgs.msg.CollisionObject()
+        obstacle3.id = 'blocks_table'
+
+        pose3 = geometry_msgs.msg.Pose()
+        pose3.position.x = 1.75
+        pose3.position.y = 0.0
+        pose3.position.z = 0.0
+        obstacle3.primitive_poses = [pose3]
+
+        shape3 = shape_msgs.msg.SolidPrimitive()
+        shape3.type = 1  # Box
+        shape3.dimensions = [0.305, 0.3, 0.023]
+        obstacle3.primitives = [shape3]
+
+        obstacle3.header.frame_id = self.moveit.config.base_frame_id
+
+        obstacle4 = moveit_msgs.msg.CollisionObject()
+        obstacle4.id = 'back_wall'
+
+        pose4 = geometry_msgs.msg.Pose()
+        pose4.position.x = -0.75
+        pose4.position.y = 0.0
+        pose4.position.z = -0.5
+        obstacle4.primitive_poses = [pose4]
+
+        shape4 = shape_msgs.msg.SolidPrimitive()
+        shape4.type = 1  # Box
+        shape4.dimensions = [0.3, 0.6, 0.3]
+        obstacle4.primitives = [shape4]
+
+        obstacle4.header.frame_id = self.moveit.config.base_frame_id
+
+        self.moveit.update_persistent_obstacle([obstacle, obstacle1, obstacle2, obstacle3, obstacle4], delete=False)
 
         return response
 
