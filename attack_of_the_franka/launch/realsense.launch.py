@@ -51,6 +51,10 @@ def generate_launch_description():
             remappings=[('/image_rect', '/camera/color/image_raw'),
                         ('/camera_info', '/camera/color/camera_info'),]
         ),
+        Node(
+            package='attack_of_the_franka',
+            executable='camera_processor',
+        ),
         # RVIZ node for viewing the robot only
         Node(
             package='rviz2',
