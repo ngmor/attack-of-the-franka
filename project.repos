@@ -14,8 +14,4 @@ repositories:
   src/attack-of-the-franka:
     type: git
     url: git@github.com:ngmor/attack-of-the-franka.git
-    version: main
-  src/hw3group-attackofthefranka:
-    type: git
-    url: git@github.com:ME495-EmbeddedSystems/hw3group-attackofthefranka.git
-    version: main
+    version: dev
