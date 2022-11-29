@@ -1155,22 +1155,25 @@ def _joint_states_to_goal_constraints(joint_state, tolerance):
 
     Args:
         joint_state: the joint states given from the results of the inverse kinematics
-                     computations
+                    computations
         tolerance:   provided by the configuration input from the user
 
     Returns
     -------
         goal_constraint: of type moveit_msgs.msg.Constraints to be used in the
-                         _assemble_plan_message function's goal contraint parameter
+                        _assemble_plan_message function's goal contraint parameter
 
     """
     joint_constraints = []
     for i in range(len(joint_state.name)):
         joint_constraint = moveit_msgs.msg.JointConstraint()
 
-        joint_constraint.joint_name = joint_state.name[i]
-        joint_constraint.position = joint_state.position[i]
-
+        if i == 7 or i == 8:
+            pass
+        else:
+            joint_constraint.joint_name = joint_state.name[i]
+            joint_constraint.position = joint_state.position[i]
+        
         # TODO - rework this into an array of tolerances and weights
         joint_constraint.tolerance_above = tolerance
         joint_constraint.tolerance_below = tolerance
@@ -1178,6 +1181,7 @@ def _joint_states_to_goal_constraints(joint_state, tolerance):
 
         joint_constraints.append(joint_constraint)
 
+    
     goal_constraint = [moveit_msgs.msg.Constraints(joint_constraints=joint_constraints)]
 
     return goal_constraint
