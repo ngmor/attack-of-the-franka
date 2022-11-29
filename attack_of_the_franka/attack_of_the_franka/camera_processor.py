@@ -13,8 +13,7 @@ from tf2_ros import TransformBroadcaster
 from geometry_msgs.msg import TransformStamped
 from tf2_ros.buffer import Buffer
 from tf2_ros.transform_listener import TransformListener
-from attack_of_the_franka.common import FRAMES, angle_axis_to_quaternion, ObjectType, \
-    WORK_AREA_APRILTAG_SIZE
+from attack_of_the_franka.common import FRAMES, angle_axis_to_quaternion, ObjectType
 
 camera_scale_factor = 1.0 / 1000.0
 
@@ -236,11 +235,26 @@ class CameraProcessor(Node):
         self.declare_parameter("broadcast_transforms_directly", True,
                                ParameterDescriptor(description="Enable broadcasting of transforms for enemies/allies from this node."))
         self.broadcast_transforms_directly = self.get_parameter("broadcast_transforms_directly").get_parameter_value().bool_value
-
         self.declare_parameter("sort_by_x", False,
                                ParameterDescriptor(description="sorts the allies and enemies in x"))
         self.sort_by_x = self.get_parameter("sort_by_x").get_parameter_value().bool_value
     
+        # Dimension parameters
+        self.declare_parameter("apriltags.robot_table_tag_size", 0.173,
+                               ParameterDescriptor(description="Size of AprilTag on robot table"))
+        self.robot_table_tag_size = self.get_parameter("apriltags.robot_table_tag_size").get_parameter_value().double_value
+        self.declare_parameter("apriltags.work_area_tag_size", 0.055,
+                               ParameterDescriptor(description="Size of AprilTags at work area bounds"))
+        self.work_area_tag_size = self.get_parameter("apriltags.work_area_tag_size").get_parameter_value().double_value
+        self.declare_parameter("robot_table.width", 0.605,
+                               ParameterDescriptor(description="Robot table width"))
+        self.robot_table_width = self.get_parameter("robot_table.width").get_parameter_value().double_value
+        self.declare_parameter("robot_table.y_tag_edge_to_base", 0.3,
+                               ParameterDescriptor(description="Y edge of AprilTag to base of robot"))
+        self.robot_table_y_tag_edge_to_base = self.get_parameter("robot_table.y_tag_edge_to_base").get_parameter_value().double_value
+        self.declare_parameter("robot_table.x_tag_edge_to_table_edge", 0.023,
+                               ParameterDescriptor(description="X edge of AprilTag to edge of robot table"))
+        self.robot_table_x_tag_edge_to_table_edge = self.get_parameter("robot_table.x_tag_edge_to_table_edge").get_parameter_value().double_value
 
         # sliders get precedence over AprilTags
         if self.enable_work_area_sliders and self.enable_work_area_apriltags:
@@ -293,14 +307,11 @@ class CameraProcessor(Node):
         tf_table_apriltag_to_base.header.frame_id = FRAMES().PANDA_TABLE
         tf_table_apriltag_to_base.child_frame_id = FRAMES().PANDA_BASE
 
-        # Measurements from table:
-        tag_size = 0.173 # m
-        table_width = 0.605 # m
-        x_edge_to_table_edge = 0.023 # m
-        y_edge_to_base = 0.3 # m
-
-        tf_table_apriltag_to_base.transform.translation.x = -(table_width / 2.0 - x_edge_to_table_edge - tag_size / 2.0)
-        tf_table_apriltag_to_base.transform.translation.y = y_edge_to_base + tag_size / 2.0
+        tf_table_apriltag_to_base.transform.translation.x = \
+            -(self.robot_table_width / 2.0 - self.robot_table_x_tag_edge_to_table_edge 
+            - self.robot_table_tag_size / 2.0)
+        tf_table_apriltag_to_base.transform.translation.y = \
+            self.robot_table_y_tag_edge_to_base + self.robot_table_tag_size / 2.0
         tf_table_apriltag_to_base.transform.translation.z = 0.0
         tf_table_apriltag_to_base.transform.rotation = angle_axis_to_quaternion(-np.pi/2,[0.,0.,1.])
 
@@ -490,19 +501,19 @@ class CameraProcessor(Node):
             self.work_area_limits_y.lower = min(
                 self.tf_camera_to_workspace1.transform.translation.y,
                 self.tf_camera_to_workspace2.transform.translation.y
-            ) - WORK_AREA_APRILTAG_SIZE / 2.
+            ) - self.work_area_tag_size / 2.
             self.work_area_limits_y.upper = max(
                 self.tf_camera_to_workspace1.transform.translation.y,
                 self.tf_camera_to_workspace2.transform.translation.y
-            ) + WORK_AREA_APRILTAG_SIZE / 2.
+            ) + self.work_area_tag_size / 2.
             self.work_area_limits_z.lower = min(
                 self.tf_camera_to_workspace1.transform.translation.z,
                 self.tf_camera_to_workspace2.transform.translation.z
-            ) - WORK_AREA_APRILTAG_SIZE / 2.
+            ) - self.work_area_tag_size / 2.
             self.work_area_limits_z.upper = max(
                 self.tf_camera_to_workspace1.transform.translation.z,
                 self.tf_camera_to_workspace2.transform.translation.z
-            ) + WORK_AREA_APRILTAG_SIZE / 2.
+            ) + self.work_area_tag_size / 2.
 
             # Get pixel coordinates to draw on picture
             self.workspace1_pixel.get_from_camera_coordinates(self.intrinsics,self.tf_camera_to_workspace1.transform.translation)

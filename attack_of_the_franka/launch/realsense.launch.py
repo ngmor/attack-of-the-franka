@@ -54,6 +54,8 @@ def generate_launch_description():
         Node(
             package='attack_of_the_franka',
             executable='camera_processor',
+            parameters=[PathJoinSubstitution(
+            [FindPackageShare('attack_of_the_franka'), 'parameters.yaml'])],
         ),
         # RVIZ node for viewing the robot only
         Node(
