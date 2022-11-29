@@ -591,7 +591,7 @@ class SimpleMove(Node):
         pose4 = geometry_msgs.msg.Pose()
         pose4.position.x = -self.back_wall_distance
         pose4.position.y = 0.0
-        pose4.position.z = -0.5
+        pose4.position.z = -self.robot_table_height + (self.back_wall_height/2)
         obstacle4.primitive_poses = [pose4]
 
         shape4 = shape_msgs.msg.SolidPrimitive()

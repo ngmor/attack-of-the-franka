@@ -164,7 +164,7 @@ class MoveGroup(Node):
         self.declare_parameter("lightsaber.grip_offset", 0.15,
                                ParameterDescriptor(description="Lightsaber grip offset"))
         self.lightsaber_grip_offset = self.get_parameter("lightsaber.grip_offset").get_parameter_value().double_value
-
+        self.table_offset = 0.091
         # Initialize API class
         config = MoveConfig()
         config.base_frame_id = 'panda_link0'
@@ -359,7 +359,7 @@ class MoveGroup(Node):
             pose = geometry_msgs.msg.Pose()
             pose.position.x = ally00.transform.translation.x
             pose.position.y = ally00.transform.translation.y
-            pose.position.z = -0.115 + (height/2) #table.transform.translation.z
+            pose.position.z = -self.table_offset + (height/2) #table.transform.translation.z
             obstacle.primitive_poses = [pose]
 
             obstacle.header.frame_id = self.moveit.config.base_frame_id
@@ -369,9 +369,9 @@ class MoveGroup(Node):
             #goal waypoint
             self.goal_waypoint = geometry_msgs.msg.Pose()
 
-            self.goal_waypoint.position.x = enemy00.transform.translation.x - 0.8025
+            self.goal_waypoint.position.x = enemy00.transform.translation.x - (self.lightsaber_full_length*0.75)
             self.goal_waypoint.position.y = enemy00.transform.translation.y
-            self.goal_waypoint.position.z = -0.115 + height  #(table.transform.translation.z - enemy00.transform.translation.z)/2
+            self.goal_waypoint.position.z = -self.table_offset + height  #(table.transform.translation.z - enemy00.transform.translation.z)/2
 
             # self.state = State.WAYPOINTS
 
@@ -1158,7 +1158,7 @@ class MoveGroup(Node):
         pose4 = geometry_msgs.msg.Pose()
         pose4.position.x = -self.back_wall_distance
         pose4.position.y = 0.0
-        pose4.position.z = -0.5
+        pose4.position.z = -self.robot_table_height + (self.back_wall_height/2)
         obstacle4.primitive_poses = [pose4]
 
         shape4 = shape_msgs.msg.SolidPrimitive()
