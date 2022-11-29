@@ -178,7 +178,7 @@ class MoveGroup(Node):
             0.0,                    # panda_joint3
             -2.356194490192345,     # panda_joint4
             0.0,                    # panda_joint5
-            1.5707963267948966,     # panda_joint6
+            (math.pi*5)/6,     # panda_joint6
             0.7853981633974483,     # panda_joint7
                                     # TODO - This might open the gripper when we try to move home
                                     # CAREFUL!
