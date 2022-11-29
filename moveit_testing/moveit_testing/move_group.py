@@ -147,6 +147,7 @@ class MoveGroup(Node):
             z=3.0
         )
         config.tolerance = 0.01
+        config.max_velocity_scaling_factor = 0.3
         config.group_name = 'panda_manipulator'
 
         self.home_pose = geometry_msgs.msg.Pose()
