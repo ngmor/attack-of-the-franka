@@ -1,0 +1,12 @@
+/**:
+  ros__parameters:
+    apriltags:
+      robot_table_tag_size: 0.173 # m
+      work_area_tag_size: 0.055 # m
+    robot_table:
+      width: 0.605 # m
+      length: 0.911 # m
+      height: 0.827 # m
+      y_tag_edge_to_base: 0.3 # m
+      x_tag_edge_to_table_edge: 0.023 # m
+    ceiling_height: 2.4 # m
