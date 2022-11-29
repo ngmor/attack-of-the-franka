@@ -30,6 +30,7 @@ import copy
 import std_msgs.msg
 import franka_msgs.action
 import math
+from rcl_interfaces.msg import ParameterDescriptor
 
 
 class State(Enum):
@@ -124,6 +125,37 @@ class MoveGroup(Node):
         self.srv_add_walls = self.create_service(
             std_srvs.srv.Empty, 'add_walls', self.add_walls_callback)
 
+         # Dimension parameters
+        self.declare_parameter("robot_table.width", 0.605,
+                               ParameterDescriptor(description="Robot table width"))
+        self.robot_table_width = self.get_parameter("robot_table.width").get_parameter_value().double_value
+        self.declare_parameter("robot_table.length", 0.911,
+                               ParameterDescriptor(description="Robot table length"))
+        self.robot_table_length = self.get_parameter("robot_table.length").get_parameter_value().double_value
+        self.declare_parameter("robot_table.height", 0.827,
+                               ParameterDescriptor(description="Robot table height"))
+        self.robot_table_height = self.get_parameter("robot_table.height").get_parameter_value().double_value
+        self.declare_parameter("ceiling_height", 2.4,
+                               ParameterDescriptor(description="Ceiling height from floor"))
+        self.ceiling_height = self.get_parameter("ceiling_height").get_parameter_value().double_value
+        self.declare_parameter("side_wall.distance", 1.0,
+                               ParameterDescriptor(description="Side wall distance from base of robot"))
+        self.side_wall_distance = self.get_parameter("side_wall.distance").get_parameter_value().double_value
+        self.declare_parameter("side_wall.height", 2.4,
+                               ParameterDescriptor(description="Side wall height from floor"))
+        self.side_wall_height = self.get_parameter("side_wall.height").get_parameter_value().double_value
+        self.declare_parameter("back_wall.distance", 0.75,
+                               ParameterDescriptor(description="Back wall distance from base of robot"))
+        self.back_wall_distance = self.get_parameter("back_wall.distance").get_parameter_value().double_value
+        self.declare_parameter("back_wall.height", 0.46,
+                               ParameterDescriptor(description="Back wall height from floor"))
+        self.back_wall_height = self.get_parameter("back_wall.height").get_parameter_value().double_value
+        self.declare_parameter("lightsaber.full_length", 1.122,
+                               ParameterDescriptor(description="Lightsaber full length"))
+        self.lightsaber_full_length = self.get_parameter("lightsaber.full_length").get_parameter_value().double_value
+        self.declare_parameter("lightsaber.grip_offset", 0.15,
+                               ParameterDescriptor(description="Lightsaber grip offset"))
+        self.lightsaber_grip_offset = self.get_parameter("lightsaber.grip_offset").get_parameter_value().double_value
 
         # Initialize API class
         config = MoveConfig()

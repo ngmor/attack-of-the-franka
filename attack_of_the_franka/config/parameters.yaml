@@ -10,3 +10,12 @@
       y_tag_edge_to_base: 0.3 # m
       x_tag_edge_to_table_edge: 0.023 # m
     ceiling_height: 2.4 # m
+    side_wall:
+      distance: 1.0 # m
+      height: 2.4 # m
+    back_wall:
+      distance: 0.75 # m
+      height: 0.46 # m
+    lightsaber:
+      full_length: 1.122 # m
+      grip_offset: 0.15 # m
