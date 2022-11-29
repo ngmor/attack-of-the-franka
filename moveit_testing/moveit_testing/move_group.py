@@ -278,101 +278,6 @@ class MoveGroup(Node):
         # call MoveIt handler
         self.moveit.handle()
 
-        
-
-        # if self.ready == 1:
-        #     if self.test_followjoints.server_is_ready():
-        #         self.test_followjoints.send_goal_async(self.trajectory)
-
-    #     if (self.moveit._state == self.moveit._state.IDLE) and (self.state == State.IDLE):
-    #    # if self.update_allies == False:
-    #         self.get_logger().info('wat')
-    #         try:
-    #             ally00 = self.tf_buffer.lookup_transform(FRAMES.PANDA_BASE, FRAMES.ALLY + '00', rclpy.time.Time())
-    #         except TransformException:
-    #             return
-    #         try:
-    #             table = self.tf_buffer.lookup_transform(FRAMES.PANDA_BASE, FRAMES.WORK_TABLE1, rclpy.time.Time())
-    #         except TransformException:
-    #             return
-    #         try:
-    #             enemy00 = self.tf_buffer.lookup_transform(FRAMES.PANDA_BASE, FRAMES.ENEMY + '00', rclpy.time.Time())
-    #         except TransformException:
-    #             return
-
-    #         try:
-    #             table1 = self.tf_buffer.lookup_transform(FRAMES.PANDA_BASE, FRAMES.WORK_TABLE1, rclpy.time.Time())
-    #         except TransformException:
-    #             return
-    #         try:
-    #             table2 = self.tf_buffer.lookup_transform(FRAMES.PANDA_BASE, FRAMES.WORK_TABLE2, rclpy.time.Time())
-    #         except TransformException:
-    #             return
-
-    #         self.get_logger().info(f'ally00.x {ally00.transform.translation.x}')
-    #         self.get_logger().info(f'ally00.y {ally00.transform.translation.y}')
-    #         self.get_logger().info(f'ally00.z {ally00.transform.translation.z}')
-    #         self.get_logger().info(f'table.z {table.transform.translation.z}')
-    #         self.get_logger().info(f'waypoint.x {enemy00.transform.translation.x - 0.8025}')
-    #         self.get_logger().info(f'waypoint.y {enemy00.transform.translation.y}')
-    #         self.get_logger().info(f'waypoint.z {(table.transform.translation.z - enemy00.transform.translation.z)/2}')
-
-    #         # self.get_logger().info(f'table.x {table2.transform.translation.x - table1.transform.translation.x}')
-    #         # self.get_logger().info(f'table1.y {abs(table1.transform.translation.y) + abs(table2.transform.translation.y)}')
-    #         # self.get_logger().info(f'table2.y {table2.transform.translation.y}')
-    #         # self.get_logger().info(f'table_center.x {((abs(table1.transform.translation.x - table2.transform.translation.x))/2) + table1.transform.translation.x}')
-    #         # self.get_logger().info(f'table_center.y {(table1.transform.translation.y + table2.transform.translation.y)/2}')
-    #         # self.get_logger().info(f'table z {table1.transform.translation.z}')
-
-
-    #         self.table_len_x = table2.transform.translation.x - table1.transform.translation.x + 0.1
-    #         self.table_len_y = abs(table1.transform.translation.y) + abs(table2.transform.translation.y) + 0.06
-    #         self.table_center_x = ((abs(table1.transform.translation.x - table2.transform.translation.x))/2) + table1.transform.translation.x
-    #         self.table_center_y = (table1.transform.translation.y + table2.transform.translation.y)/2
-
-    #         obstacle = moveit_msgs.msg.CollisionObject()
-    #         obstacle.id = FRAMES.ALLY + '00'
-
-    #         shape = shape_msgs.msg.SolidPrimitive()
-    #         shape.type = 1  # Box
-    #        # shape.type = 3  # Cylinder
-    #         length = 0.078
-    #         width = 0.105
-    #         height = -(table.transform.translation.z - ally00.transform.translation.z)
-    #         shape.dimensions = [length, width, height]
-    #         obstacle.primitives = [shape]
-
-    #         pose = geometry_msgs.msg.Pose()
-    #         pose.position.x = ally00.transform.translation.x
-    #         pose.position.y = ally00.transform.translation.y
-    #         pose.position.z = -0.091 + (height/2) #table.transform.translation.z 0.115
-    #         obstacle.primitive_poses = [pose]
-
-    #         obstacle.header.frame_id = self.moveit.config.base_frame_id
-
-
-    #         self.moveit.update_obstacles([obstacle], delete=False)
-
-    #         #goal waypoint
-    #         self.goal_waypoint = geometry_msgs.msg.Pose()
-
-    #         self.goal_waypoint.position.x = enemy00.transform.translation.x - 0.8025
-    #         self.goal_waypoint.position.y = enemy00.transform.translation.y
-    #         self.goal_waypoint.position.z = -0.091 + 2*height  #(table.transform.translation.z - enemy00.transform.translation.z)/2
-    #         self.goal_waypoint.orientation.x = math.pi
-
-            # self.state = State.WAYPOINTS
-
-            # self.count -= 1
-            # if self.count == 0:
-            #     self.update_allies = True
-
-
-
-        # self.close_gripper()
-        # if self.pickup_action_client.server_is_ready():
-        #     self.pickup_action_client.send_goal_async(self.close_gripper())
-        #     self.get_logger().info(f'gripper info output: {self.close_gripper()}')
 
         # State machine
         if self.state == State.MOVE_TO_HOME_START:
@@ -462,7 +367,7 @@ class MoveGroup(Node):
                     return
                 try:
                     enemy00 = self.tf_buffer.lookup_transform(FRAMES.PANDA_BASE, FRAMES.ENEMY + '00', rclpy.time.Time())
-                    self.state = State.WAYPOINTS
+                    #self.state = State.WAYPOINTS
                 except TransformException:
                     return
 
