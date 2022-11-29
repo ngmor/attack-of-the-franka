@@ -182,8 +182,8 @@ class MoveGroup(Node):
             0.7853981633974483,     # panda_joint7
                                     # TODO - This might open the gripper when we try to move home
                                     # CAREFUL!
-            0.035,                  # 0.035, 0.0 panda_finger_joint1
-            0.035,                  # 0.035, 0.0 panda_finger_joint2
+            0.0,                  # 0.035, 0.0 panda_finger_joint1
+            0.0                 # 0.035, 0.0 panda_finger_joint2
         ]
 
         self.waypoint_joints = [math.radians(3), math.radians(-35), math.radians(31), math.radians(-111), math.radians(17), math.radians(81), math.radians(77), 0.035, 0.035]
