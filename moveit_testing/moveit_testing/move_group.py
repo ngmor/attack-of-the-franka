@@ -170,6 +170,9 @@ class MoveGroup(Node):
         self.declare_parameter("lightsaber.grip_offset", 0.15,
                                ParameterDescriptor(description="Lightsaber grip offset"))
         self.lightsaber_grip_offset = self.get_parameter("lightsaber.grip_offset").get_parameter_value().double_value
+        self.declare_parameter("lightsaber.gripper_height", 0.08,
+                               ParameterDescriptor(description="Lightsaber gripper height"))
+        self.lightsaber_gripper_height = self.get_parameter("lightsaber.gripper_height").get_parameter_value().double_value
         self.table_offset = 0.091
         # Initialize API class
         config = MoveConfig()
@@ -1246,7 +1249,23 @@ class MoveGroup(Node):
 
         obstacle5.header.frame_id = self.moveit.config.base_frame_id
 
-        self.moveit.update_persistent_obstacle([obstacle, obstacle1, obstacle2, obstacle3, obstacle4, obstacle5], delete=False)
+        obstacle6 = moveit_msgs.msg.CollisionObject()
+        obstacle6.id = 'gripper_height_offset'
+
+        pose6 = geometry_msgs.msg.Pose()
+        pose6.position.x = 0.355
+        pose6.position.y = 0.0
+        pose6.position.z = self.lightsaber_gripper_height/2
+        obstacle6.primitive_poses = [pose6]
+
+        shape6 = shape_msgs.msg.SolidPrimitive()
+        shape6.type = 1  # Box
+        shape6.dimensions = [0.2, self.robot_table_width, self.lightsaber_gripper_height]
+        obstacle6.primitives = [shape6]
+
+        obstacle6.header.frame_id = self.moveit.config.base_frame_id
+
+        self.moveit.update_persistent_obstacle([obstacle, obstacle1, obstacle2, obstacle3, obstacle4, obstacle5, obstacle6], delete=False)
 
         
         #arm table should be attached collision object
@@ -1374,7 +1393,23 @@ class MoveGroup(Node):
 
         obstacle5.header.frame_id = self.moveit.config.base_frame_id
 
-        self.moveit.update_persistent_obstacle([obstacle, obstacle1, obstacle2, obstacle3, obstacle4, obstacle5], delete=False)
+        obstacle6 = moveit_msgs.msg.CollisionObject()
+        obstacle6.id = 'gripper_height_offset'
+
+        pose6 = geometry_msgs.msg.Pose()
+        pose6.position.x = 0.0
+        pose6.position.y = 0.0355
+        pose6.position.z = self.lightsaber_gripper_height
+        obstacle6.primitive_poses = [pose6]
+
+        shape6 = shape_msgs.msg.SolidPrimitive()
+        shape6.type = 1  # Box
+        shape6.dimensions = [self.robot_table_length, 0.04, self.robot_table_height]
+        obstacle6.primitives = [shape6]
+
+        obstacle6.header.frame_id = self.moveit.config.base_frame_id
+
+        self.moveit.update_persistent_obstacle([obstacle, obstacle1, obstacle2, obstacle3, obstacle4, obstacle5, obstacle6], delete=False)
 
         
         #arm table should be attached collision object

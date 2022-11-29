@@ -19,3 +19,4 @@
     lightsaber:
       full_length: 1.122 # m
       grip_offset: 0.15 # m
+      gripper_height: 0.08 #m
