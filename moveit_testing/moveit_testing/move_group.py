@@ -1260,7 +1260,7 @@ class MoveGroup(Node):
 
         shape6 = shape_msgs.msg.SolidPrimitive()
         shape6.type = 1  # Box
-        shape6.dimensions = [0.2, self.robot_table_width, self.lightsaber_gripper_height]
+        shape6.dimensions = [0.35, self.robot_table_width, self.lightsaber_gripper_height]
         obstacle6.primitives = [shape6]
 
         obstacle6.header.frame_id = self.moveit.config.base_frame_id
