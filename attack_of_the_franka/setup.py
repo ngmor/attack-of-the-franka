@@ -14,6 +14,7 @@ setup(
             'launch/realsense.launch.py',
             'config/apriltag.yaml',
             'config/apriltag.rviz',
+            'config/parameters.yaml',
             ]),
     ],
     install_requires=['setuptools'],

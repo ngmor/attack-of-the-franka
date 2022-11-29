@@ -24,7 +24,7 @@ from enum import Enum, auto
 import shape_msgs.msg
 import moveit_testing_interfaces.srv
 import copy
-
+from rcl_interfaces.msg import ParameterDescriptor
 
 class State(Enum):
     """Top level states for main state machine."""
@@ -83,6 +83,38 @@ class SimpleMove(Node):
             'update_attached_obstacles', self.attached_obstacles_callback)
         self.srv_add_walls = self.create_service(
             std_srvs.srv.Empty, 'add_walls', self.add_walls_callback)
+
+        # Dimension parameters
+        self.declare_parameter("robot_table.width", 0.605,
+                               ParameterDescriptor(description="Robot table width"))
+        self.robot_table_width = self.get_parameter("robot_table.width").get_parameter_value().double_value
+        self.declare_parameter("robot_table.length", 0.911,
+                               ParameterDescriptor(description="Robot table length"))
+        self.robot_table_length = self.get_parameter("robot_table.length").get_parameter_value().double_value
+        self.declare_parameter("robot_table.height", 0.827,
+                               ParameterDescriptor(description="Robot table height"))
+        self.robot_table_height = self.get_parameter("robot_table.height").get_parameter_value().double_value
+        self.declare_parameter("ceiling_height", 2.4,
+                               ParameterDescriptor(description="Ceiling height from floor"))
+        self.ceiling_height = self.get_parameter("ceiling_height").get_parameter_value().double_value
+        self.declare_parameter("side_wall.distance", 1.0,
+                               ParameterDescriptor(description="Side wall distance from base of robot"))
+        self.side_wall_distance = self.get_parameter("side_wall.distance").get_parameter_value().double_value
+        self.declare_parameter("side_wall.height", 2.4,
+                               ParameterDescriptor(description="Side wall height from floor"))
+        self.side_wall_height = self.get_parameter("side_wall.height").get_parameter_value().double_value
+        self.declare_parameter("back_wall.distance", 0.75,
+                               ParameterDescriptor(description="Back wall distance from base of robot"))
+        self.back_wall_distance = self.get_parameter("back_wall.distance").get_parameter_value().double_value
+        self.declare_parameter("back_wall.height", 0.46,
+                               ParameterDescriptor(description="Back wall height from floor"))
+        self.back_wall_height = self.get_parameter("back_wall.height").get_parameter_value().double_value
+        self.declare_parameter("lightsaber.full_length", 1.122,
+                               ParameterDescriptor(description="Lightsaber full length"))
+        self.lightsaber_full_length = self.get_parameter("lightsaber.full_length").get_parameter_value().double_value
+        self.declare_parameter("lightsaber.grip_offset", 0.15,
+                               ParameterDescriptor(description="Lightsaber grip offset"))
+        self.lightsaber_grip_offset = self.get_parameter("lightsaber.grip_offset").get_parameter_value().double_value
 
         # Initialize API class
         config = MoveConfig()
@@ -488,22 +520,18 @@ class SimpleMove(Node):
         return response
 
     def add_walls_callback(self, request, response):
-        # ros2 service call /update_persistent_obstacles moveit_testing_interfaces/srv/UpdateObstacles
-        #     "{position: {x: 0.75, y: 0.5, z: 0.0}, length: 1.0, width: 0.25, height: 4.0,
-        #     id: 'wall1', delete_obstacle: false}"
-
         obstacle = moveit_msgs.msg.CollisionObject()
         obstacle.id = 'wall_0'
 
         pose = geometry_msgs.msg.Pose()
-        pose.position.x = 0.75
-        pose.position.y = 0.75
+        pose.position.x = 0.25
+        pose.position.y = self.side_wall_distance
         pose.position.z = 0.0
         obstacle.primitive_poses = [pose]
 
         shape = shape_msgs.msg.SolidPrimitive()
         shape.type = 1  # Box
-        shape.dimensions = [1.125, 0.25, 2.0]
+        shape.dimensions = [3.0, 0.25, self.side_wall_height]
         obstacle.primitives = [shape]
 
         obstacle.header.frame_id = self.moveit.config.base_frame_id
@@ -513,37 +541,108 @@ class SimpleMove(Node):
         obstacle1.id = 'wall_1'
 
         pose1 = geometry_msgs.msg.Pose()
-        pose1.position.x = 0.75
-        pose1.position.y = -0.75
+        pose1.position.x = 0.25
+        pose1.position.y = -self.side_wall_distance
         pose1.position.z = 0.0
         obstacle1.primitive_poses = [pose1]
 
         shape1 = shape_msgs.msg.SolidPrimitive()
         shape1.type = 1  # Box
-        shape1.dimensions = [1.125, 0.25, 2.0]
+        shape1.dimensions = [3.0, 0.25, self.side_wall_height]
         obstacle1.primitives = [shape1]
 
         obstacle1.header.frame_id = self.moveit.config.base_frame_id
-        # self.moveit.update_persistent_obstacle(obstacle1, delete=False)
 
         obstacle2 = moveit_msgs.msg.CollisionObject()
-        obstacle2.id = 'wall_2'
+        obstacle2.id = 'floor'
 
         pose2 = geometry_msgs.msg.Pose()
-        pose2.position.x = -0.75
+        pose2.position.x = 0.0
         pose2.position.y = 0.0
-        pose2.position.z = 0.0
+        pose2.position.z = -(self.robot_table_height)
         obstacle2.primitive_poses = [pose2]
 
         shape2 = shape_msgs.msg.SolidPrimitive()
         shape2.type = 1  # Box
-        shape2.dimensions = [0.25, 1.125, 2.0]
+        shape2.dimensions = [4.0, 2.0, 0.02]
         obstacle2.primitives = [shape2]
 
         obstacle2.header.frame_id = self.moveit.config.base_frame_id
-        # self.moveit.update_persistent_obstacle(obstacle2, delete=False)
 
-        self.moveit.update_persistent_obstacle([obstacle, obstacle1, obstacle2], delete=False)
+        obstacle3 = moveit_msgs.msg.CollisionObject()
+        obstacle3.id = 'blocks_table'
+
+        pose3 = geometry_msgs.msg.Pose()
+        pose3.position.x = 1.32
+        pose3.position.y = 0.0
+        pose3.position.z = -0.115
+        obstacle3.primitive_poses = [pose3]
+
+        shape3 = shape_msgs.msg.SolidPrimitive()
+        shape3.type = 1  # Box
+        shape3.dimensions = [0.5, 0.8, 0.023]
+        obstacle3.primitives = [shape3]
+
+        obstacle3.header.frame_id = self.moveit.config.base_frame_id
+
+        obstacle4 = moveit_msgs.msg.CollisionObject()
+        obstacle4.id = 'back_wall'
+
+        pose4 = geometry_msgs.msg.Pose()
+        pose4.position.x = -self.back_wall_distance
+        pose4.position.y = 0.0
+        pose4.position.z = -self.robot_table_height + (self.back_wall_height/2)
+        obstacle4.primitive_poses = [pose4]
+
+        shape4 = shape_msgs.msg.SolidPrimitive()
+        shape4.type = 1  # Box
+        shape4.dimensions = [0.3, 0.6, self.back_wall_height]
+        obstacle4.primitives = [shape4]
+
+        obstacle4.header.frame_id = self.moveit.config.base_frame_id
+
+        obstacle5 = moveit_msgs.msg.CollisionObject()
+        obstacle5.id = 'ceiling'
+
+        pose5 = geometry_msgs.msg.Pose()
+        pose5.position.x = 0.0
+        pose5.position.y = 0.0
+        pose5.position.z = self.ceiling_height
+        obstacle5.primitive_poses = [pose5]
+
+        shape5 = shape_msgs.msg.SolidPrimitive()
+        shape5.type = 1  # Box
+        shape5.dimensions = [4.0, 2.0, 0.02]
+        obstacle5.primitives = [shape5]
+
+        obstacle5.header.frame_id = self.moveit.config.base_frame_id
+
+        self.moveit.update_persistent_obstacle([obstacle, obstacle1, obstacle2, obstacle3, obstacle4, obstacle5], delete=False)
+
+        
+        #arm table should be attached collision object
+        attached_obstacle = moveit_msgs.msg.AttachedCollisionObject()
+        attached_obstacle.link_name = 'panda_link0'
+        attached_obstacle.object.header.frame_id = 'panda_link0'
+        attached_obstacle.object.header.stamp = self.get_clock().now().to_msg()
+        attached_obstacle.object.id = 'arm_table'
+
+        pose2 = geometry_msgs.msg.Pose()
+        pose2.position.x = 0.0
+        pose2.position.y = 0.0
+        pose2.position.z = -(self.robot_table_height/2)
+        attached_obstacle.object.primitive_poses = [pose2]
+
+        shape2 = shape_msgs.msg.SolidPrimitive()
+        shape2.type = 1  # Box
+        shape2.dimensions = [self.robot_table_length, self.robot_table_width, self.robot_table_height]
+        attached_obstacle.object.primitives = [shape2]
+
+        attached_obstacle.object.operation = attached_obstacle.object.ADD
+
+        attached_obstacle.touch_links = ['panda_link0', 'panda_link1']
+
+        self.moveit.update_attached_obstacles(attached_obstacle, delete=False)
 
         return response
 
