@@ -1092,13 +1092,13 @@ class MoveGroup(Node):
 
         pose = geometry_msgs.msg.Pose()
         pose.position.x = 0.25
-        pose.position.y = 0.75
+        pose.position.y = self.side_wall_distance
         pose.position.z = 0.0
         obstacle.primitive_poses = [pose]
 
         shape = shape_msgs.msg.SolidPrimitive()
         shape.type = 1  # Box
-        shape.dimensions = [3.0, 0.25, 1.0]
+        shape.dimensions = [3.0, 0.25, self.side_wall_height]
         obstacle.primitives = [shape]
 
         obstacle.header.frame_id = self.moveit.config.base_frame_id
@@ -1109,19 +1109,32 @@ class MoveGroup(Node):
 
         pose1 = geometry_msgs.msg.Pose()
         pose1.position.x = 0.25
-        pose1.position.y = -0.75
+        pose1.position.y = -self.side_wall_distance
         pose1.position.z = 0.0
         obstacle1.primitive_poses = [pose1]
 
         shape1 = shape_msgs.msg.SolidPrimitive()
         shape1.type = 1  # Box
-        shape1.dimensions = [3.0, 0.25, 1.0]
+        shape1.dimensions = [3.0, 0.25, self.side_wall_height]
         obstacle1.primitives = [shape1]
 
         obstacle1.header.frame_id = self.moveit.config.base_frame_id
-        # self.moveit.update_persistent_obstacle(obstacle1, delete=False)
 
-        # self.moveit.update_persistent_obstacle(obstacle2, delete=False)
+        obstacle2 = moveit_msgs.msg.CollisionObject()
+        obstacle2.id = 'floor'
+
+        pose2 = geometry_msgs.msg.Pose()
+        pose2.position.x = 0.0
+        pose2.position.y = 0.0
+        pose2.position.z = -(self.robot_table_height)
+        obstacle2.primitive_poses = [pose2]
+
+        shape2 = shape_msgs.msg.SolidPrimitive()
+        shape2.type = 1  # Box
+        shape2.dimensions = [4.0, 2.0, 0.02]
+        obstacle2.primitives = [shape2]
+
+        obstacle2.header.frame_id = self.moveit.config.base_frame_id
 
         obstacle3 = moveit_msgs.msg.CollisionObject()
         obstacle3.id = 'blocks_table'
@@ -1143,19 +1156,35 @@ class MoveGroup(Node):
         obstacle4.id = 'back_wall'
 
         pose4 = geometry_msgs.msg.Pose()
-        pose4.position.x = -0.75
+        pose4.position.x = -self.back_wall_distance
         pose4.position.y = 0.0
         pose4.position.z = -0.5
         obstacle4.primitive_poses = [pose4]
 
         shape4 = shape_msgs.msg.SolidPrimitive()
         shape4.type = 1  # Box
-        shape4.dimensions = [0.3, 0.6, 0.3]
+        shape4.dimensions = [0.3, 0.6, self.back_wall_height]
         obstacle4.primitives = [shape4]
 
         obstacle4.header.frame_id = self.moveit.config.base_frame_id
 
-        self.moveit.update_persistent_obstacle([obstacle, obstacle1, obstacle3, obstacle4], delete=False)
+        obstacle5 = moveit_msgs.msg.CollisionObject()
+        obstacle5.id = 'ceiling'
+
+        pose5 = geometry_msgs.msg.Pose()
+        pose5.position.x = 0.0
+        pose5.position.y = 0.0
+        pose5.position.z = self.ceiling_height
+        obstacle5.primitive_poses = [pose5]
+
+        shape5 = shape_msgs.msg.SolidPrimitive()
+        shape5.type = 1  # Box
+        shape5.dimensions = [4.0, 2.0, 0.02]
+        obstacle5.primitives = [shape5]
+
+        obstacle5.header.frame_id = self.moveit.config.base_frame_id
+
+        self.moveit.update_persistent_obstacle([obstacle, obstacle1, obstacle2, obstacle3, obstacle4, obstacle5], delete=False)
 
         
         #arm table should be attached collision object
@@ -1168,12 +1197,12 @@ class MoveGroup(Node):
         pose2 = geometry_msgs.msg.Pose()
         pose2.position.x = 0.0
         pose2.position.y = 0.0
-        pose2.position.z = 0.0
+        pose2.position.z = -(self.robot_table_height/2)
         attached_obstacle.object.primitive_poses = [pose2]
 
         shape2 = shape_msgs.msg.SolidPrimitive()
         shape2.type = 1  # Box
-        shape2.dimensions = [0.605, 0.3, 0.023]
+        shape2.dimensions = [self.robot_table_length, self.robot_table_width, self.robot_table_height]
         attached_obstacle.object.primitives = [shape2]
 
         attached_obstacle.object.operation = attached_obstacle.object.ADD
