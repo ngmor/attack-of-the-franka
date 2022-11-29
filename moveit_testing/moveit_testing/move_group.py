@@ -288,22 +288,31 @@ class MoveGroup(Node):
             except TransformException:
                 return
 
+            try:
+                table1 = self.tf_buffer.lookup_transform(FRAMES.PANDA_BASE, FRAMES.WORK_TABLE1, rclpy.time.Time())
+            except TransformException:
+                return
+            try:
+                table2 = self.tf_buffer.lookup_transform(FRAMES.PANDA_BASE, FRAMES.WORK_TABLE2, rclpy.time.Time())
+            except TransformException:
+                return
+
             # self.get_logger().info(f'ally00.x {ally00.transform.translation.x}')
             # self.get_logger().info(f'ally00.y {ally00.transform.translation.y}')
             # self.get_logger().info(f'ally00.z {ally00.transform.translation.z}')
             # self.get_logger().info(f'table.z {table.transform.translation.z}')
-            self.get_logger().info(f'waypoint.x {enemy00.transform.translation.x - 0.8025}')
-            self.get_logger().info(f'waypoint.y {enemy00.transform.translation.y}')
-            self.get_logger().info(f'waypoint.z {(table.transform.translation.z - enemy00.transform.translation.z)/2}')
+            # self.get_logger().info(f'waypoint.x {enemy00.transform.translation.x - 0.8025}')
+            # self.get_logger().info(f'waypoint.y {enemy00.transform.translation.y}')
+            # self.get_logger().info(f'waypoint.z {(table.transform.translation.z - enemy00.transform.translation.z)/2}')
+
+            self.get_logger().info(f'table.x {abs(table1.transform.translation.x - table2.transform.translation.x)}')
+            self.get_logger().info(f'table.y {abs(table1.transform.translation.y - table2.transform.translation.y)}')
+            self.get_logger().info(f'table.y {table1.transform.translation.z}')
+            self.get_logger().info(f'table_center.x {abs(table1.transform.translation.x - table2.transform.translation.x)/2}')
+            self.get_logger().info(f'table_center.y {abs((table1.transform.translation.y - table2.transform.translation.y)/2)}')
 
             obstacle = moveit_msgs.msg.CollisionObject()
             obstacle.id = FRAMES.ALLY + '00'
-
-            pose = geometry_msgs.msg.Pose()
-            pose.position.x = ally00.transform.translation.x
-            pose.position.y = ally00.transform.translation.y
-            pose.position.z = table.transform.translation.z
-            obstacle.primitive_poses = [pose]
 
             shape = shape_msgs.msg.SolidPrimitive()
             shape.type = 1  # Box
@@ -314,6 +323,12 @@ class MoveGroup(Node):
             shape.dimensions = [length, width, height]
             obstacle.primitives = [shape]
 
+            pose = geometry_msgs.msg.Pose()
+            pose.position.x = ally00.transform.translation.x
+            pose.position.y = ally00.transform.translation.y
+            pose.position.z = -0.115 + (height/2) #table.transform.translation.z
+            obstacle.primitive_poses = [pose]
+
             obstacle.header.frame_id = self.moveit.config.base_frame_id
 
             self.moveit.update_obstacles([obstacle], delete=False)
@@ -323,7 +338,7 @@ class MoveGroup(Node):
 
             self.goal_waypoint.position.x = enemy00.transform.translation.x - 0.8025
             self.goal_waypoint.position.y = enemy00.transform.translation.y
-            self.goal_waypoint.position.z = (table.transform.translation.z - enemy00.transform.translation.z)/2
+            self.goal_waypoint.position.z = -0.115 + height  #(table.transform.translation.z - enemy00.transform.translation.z)/2
 
             # self.state = State.WAYPOINTS
 
@@ -1079,14 +1094,14 @@ class MoveGroup(Node):
         obstacle3.id = 'blocks_table'
 
         pose3 = geometry_msgs.msg.Pose()
-        pose3.position.x = 1.75
+        pose3.position.x = 1.32
         pose3.position.y = 0.0
-        pose3.position.z = 0.0
+        pose3.position.z = -0.115
         obstacle3.primitive_poses = [pose3]
 
         shape3 = shape_msgs.msg.SolidPrimitive()
         shape3.type = 1  # Box
-        shape3.dimensions = [0.305, 0.3, 0.023]
+        shape3.dimensions = [0.5, 0.8, 0.023]
         obstacle3.primitives = [shape3]
 
         obstacle3.header.frame_id = self.moveit.config.base_frame_id
