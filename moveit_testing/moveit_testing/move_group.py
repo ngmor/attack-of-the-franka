@@ -30,6 +30,10 @@ import copy
 import std_msgs.msg
 import franka_msgs.action
 import math
+from tf2_ros.buffer import Buffer
+from tf2_ros.transform_listener import TransformListener
+from tf2_ros import TransformException
+from attack_of_the_franka.common import FRAMES
 
 
 class State(Enum):
@@ -44,8 +48,8 @@ class State(Enum):
     PLAN_WAIT = auto(),
     EXECUTE_START = auto(),
     EXECUTE_WAIT = auto(),
-    WAYPOINTS = auto()
-    WAYPOINTS_WAIT = auto()
+    WAYPOINTS = auto(),
+    WAYPOINTS_WAIT = auto(),
     NEXT_WAYPOINT = auto()
 
 
@@ -123,6 +127,10 @@ class MoveGroup(Node):
                                                      self.home_waypoint_callback)
         self.srv_add_walls = self.create_service(
             std_srvs.srv.Empty, 'add_walls', self.add_walls_callback)
+
+         # create a listener for brick position
+        self.tf_buffer = Buffer()
+        self.tf_obj_listener = TransformListener(self.tf_buffer, self)
 
 
         # Initialize API class
@@ -208,6 +216,10 @@ class MoveGroup(Node):
 
         self.home_waypoint = False
 
+        self.update_allies = False
+
+        self.count = 2
+
 
     def obstacle_info(self):
         """
@@ -254,10 +266,72 @@ class MoveGroup(Node):
         # call MoveIt handler
         self.moveit.handle()
 
-        if self.ready == 1:
-            if self.test_followjoints.server_is_ready():
-                self.test_followjoints.send_goal_async(self.trajectory)
         
+
+        # if self.ready == 1:
+        #     if self.test_followjoints.server_is_ready():
+        #         self.test_followjoints.send_goal_async(self.trajectory)
+
+     #   if (self.moveit._state == self.moveit._state.IDLE) and (self.state == State.IDLE):
+    #    # if self.update_allies == False:
+    #         self.get_logger().info('wat')
+    #         try:
+    #             ally00 = self.tf_buffer.lookup_transform(FRAMES.PANDA_BASE, FRAMES.ALLY + '00', rclpy.time.Time())
+    #         except TransformException:
+    #             return
+    #         try:
+    #             table = self.tf_buffer.lookup_transform(FRAMES.PANDA_BASE, FRAMES.WORK_TABLE1, rclpy.time.Time())
+    #         except TransformException:
+    #             return
+    #         try:
+    #             enemy00 = self.tf_buffer.lookup_transform(FRAMES.PANDA_BASE, FRAMES.ENEMY + '00', rclpy.time.Time())
+    #         except TransformException:
+    #             return
+
+    #         # self.get_logger().info(f'ally00.x {ally00.transform.translation.x}')
+    #         # self.get_logger().info(f'ally00.y {ally00.transform.translation.y}')
+    #         # self.get_logger().info(f'ally00.z {ally00.transform.translation.z}')
+    #         # self.get_logger().info(f'table.z {table.transform.translation.z}')
+    #         self.get_logger().info(f'waypoint.x {enemy00.transform.translation.x - 0.8025}')
+    #         self.get_logger().info(f'waypoint.y {enemy00.transform.translation.y}')
+    #         self.get_logger().info(f'waypoint.z {(table.transform.translation.z - enemy00.transform.translation.z)/2}')
+
+    #         obstacle = moveit_msgs.msg.CollisionObject()
+    #         obstacle.id = FRAMES.ALLY + '00'
+
+    #         pose = geometry_msgs.msg.Pose()
+    #         pose.position.x = ally00.transform.translation.x
+    #         pose.position.y = ally00.transform.translation.y
+    #         pose.position.z = table.transform.translation.z
+    #         obstacle.primitive_poses = [pose]
+
+    #         shape = shape_msgs.msg.SolidPrimitive()
+    #         shape.type = 1  # Box
+    #        # shape.type = 3  # Cylinder
+    #         length = 0.105
+    #         width = 0.078
+    #         height = -(table.transform.translation.z - ally00.transform.translation.z)
+    #         shape.dimensions = [length, width, height]
+    #         obstacle.primitives = [shape]
+
+    #         obstacle.header.frame_id = self.moveit.config.base_frame_id
+
+    #         self.moveit.update_obstacles([obstacle], delete=False)
+
+    #         #goal waypoint
+    #         self.goal_waypoint = geometry_msgs.msg.Pose()
+
+    #         self.goal_waypoint.position.x = enemy00.transform.translation.x - 0.8025
+    #         self.goal_waypoint.position.y = enemy00.transform.translation.y
+    #         self.goal_waypoint.position.z = (table.transform.translation.z - enemy00.transform.translation.z)/2
+
+            # self.state = State.WAYPOINTS
+
+            # self.count -= 1
+            # if self.count == 0:
+            #     self.update_allies = True
+
+
 
         # self.close_gripper()
         # if self.pickup_action_client.server_is_ready():
@@ -730,80 +804,86 @@ class MoveGroup(Node):
         return response
 
     def waypoint_poses(self):
-        self.waypoints = 1
-        point1 = geometry_msgs.msg.Point()
-        point1.x = 0.35
-        point1.y = 0.0
-        point1.z = 0.6
-        orientation1 = geometry_msgs.msg.Pose().orientation
-        orientation1.x = math.pi
-        # orientation1.y = 0.0
-        # orientation1.z = 0.0
-        # orientation1.w = 0.0
-        # orientation1.x = 1.0
-        # orientation1.y = 0.5
-        # orientation1.z = 0.0
-        #orientation1.w = 2.0
-
-        point2 = geometry_msgs.msg.Point()
-        point2.x = 0.2
-        point2.y = 0.35
-        point2.z = 0.8
-        orientation2 = geometry_msgs.msg.Pose().orientation
-        orientation2.x = -1.0
-
-        point3 = geometry_msgs.msg.Point()
-        point3.x = -0.1
-        point3.y = 0.35
-        point3.z = 0.7
-        orientation3 = geometry_msgs.msg.Pose().orientation
-        orientation3.x = -1.0
-
-        point4 = geometry_msgs.msg.Point()
-        point4.x = -0.3
-        point4.y = 0.0
-        point4.z = 0.8
-        orientation4 = geometry_msgs.msg.Pose().orientation
-        orientation4.w = 1.0
-
-        point5 = geometry_msgs.msg.Point()
-        point5.x = -0.3
-        point5.y = -0.3
-        point5.z = 0.9
-        orientation5 = geometry_msgs.msg.Pose().orientation
-        orientation5.x = 1.0
-
-        point6 = geometry_msgs.msg.Point()
-        point6.x = -0.3
-        point6.y = -0.4
-        point6.z = 0.5
-        orientation6 = geometry_msgs.msg.Pose().orientation
-        orientation6.x = math.pi
-
-        points = [point1, point2, point3, point4, point5, point6]
-        orientations = [orientation1, orientation2, orientation3, orientation4, orientation5, orientation6]
-        #points = [point1, point2]
-        #orientations = [orientation1, orientation2]
-        self.goal_waypoint = geometry_msgs.msg.Pose()
-        #self.goal_pose.position = request.position
-        # self.goal_waypoint.position  = points[0]
-        # self.goal_waypoint.orientation = orientations[0]
-        self.flag = 1
-        self.i = len(points)
         self.state = State.WAYPOINTS
-        i = self.ind
-       # for i in range(1, len(points)):
-        if i < len(points):
-            if self.moveit._excecution_complete == 1:
-                self.goal_waypoint = geometry_msgs.msg.Pose()
-                #self.goal_pose.position = request.position
-                self.goal_waypoint.position  = points[i]
-                self.goal_waypoint.orientation = orientations[i]
-                self.get_logger().info(f'point index: {i}')
-                self.flag = 1
-                self.state = State.WAYPOINTS
-            else:
-                pass
+        self.goal_waypoint.position.x = 0.6443
+        self.goal_waypoint.position.y = -0.1
+        self.goal_waypoint.position.z = 0.5
+        self.goal_waypoint.orientation.x = math.pi
+
+    #     self.waypoints = 1
+    #     point1 = geometry_msgs.msg.Point()
+    #     point1.x = 0.35
+    #     point1.y = 0.0
+    #     point1.z = 0.6
+    #     orientation1 = geometry_msgs.msg.Pose().orientation
+    #     orientation1.x = math.pi
+    #     # orientation1.y = 0.0
+    #     # orientation1.z = 0.0
+    #     # orientation1.w = 0.0
+    #     # orientation1.x = 1.0
+    #     # orientation1.y = 0.5
+    #     # orientation1.z = 0.0
+    #     #orientation1.w = 2.0
+
+    #     point2 = geometry_msgs.msg.Point()
+    #     point2.x = 0.2
+    #     point2.y = 0.35
+    #     point2.z = 0.8
+    #     orientation2 = geometry_msgs.msg.Pose().orientation
+    #     orientation2.x = -1.0
+
+    #     point3 = geometry_msgs.msg.Point()
+    #     point3.x = -0.1
+    #     point3.y = 0.35
+    #     point3.z = 0.7
+    #     orientation3 = geometry_msgs.msg.Pose().orientation
+    #     orientation3.x = -1.0
+
+    #     point4 = geometry_msgs.msg.Point()
+    #     point4.x = -0.3
+    #     point4.y = 0.0
+    #     point4.z = 0.8
+    #     orientation4 = geometry_msgs.msg.Pose().orientation
+    #     orientation4.w = 1.0
+
+    #     point5 = geometry_msgs.msg.Point()
+    #     point5.x = -0.3
+    #     point5.y = -0.3
+    #     point5.z = 0.9
+    #     orientation5 = geometry_msgs.msg.Pose().orientation
+    #     orientation5.x = 1.0
+
+    #     point6 = geometry_msgs.msg.Point()
+    #     point6.x = -0.3
+    #     point6.y = -0.4
+    #     point6.z = 0.5
+    #     orientation6 = geometry_msgs.msg.Pose().orientation
+    #     orientation6.x = math.pi
+
+    #     points = [point1, point2, point3, point4, point5, point6]
+    #     orientations = [orientation1, orientation2, orientation3, orientation4, orientation5, orientation6]
+    #     #points = [point1, point2]
+    #     #orientations = [orientation1, orientation2]
+    #     self.goal_waypoint = geometry_msgs.msg.Pose()
+    #     #self.goal_pose.position = request.position
+    #     # self.goal_waypoint.position  = points[0]
+    #     # self.goal_waypoint.orientation = orientations[0]
+    #     self.flag = 1
+    #     self.i = len(points)
+    #     self.state = State.WAYPOINTS
+    #     i = self.ind
+    #    # for i in range(1, len(points)):
+    #     if i < len(points):
+    #         if self.moveit._excecution_complete == 1:
+    #             self.goal_waypoint = geometry_msgs.msg.Pose()
+    #             #self.goal_pose.position = request.position
+    #             self.goal_waypoint.position  = points[i]
+    #             self.goal_waypoint.orientation = orientations[i]
+    #             self.get_logger().info(f'point index: {i}')
+    #             self.flag = 1
+    #             self.state = State.WAYPOINTS
+    #         else:
+    #             pass
 
     def test_waypoint_lightsaber_callback(self, request, response):
         self.state = State.WAYPOINTS
@@ -921,7 +1001,7 @@ class MoveGroup(Node):
         Store obstacle position, dimensions, ids and delete flag value input by the user
 
         Example call:
-        ros2 service call /update_attached_obstacles moveit_testing_interfaces/srv/UpdateAttachedObstacles "{link_name: "panda_hand_tcp", position: {x: 0.3125, y: 0.0, z: 0.0}, length: 1.125, width: 0.033, height: 0.2, id: 'gripping', type: 3, delete_obstacle: false}"
+        ros2 service call /update_attached_obstacles moveit_testing_interfaces/srv/UpdateAttachedObstacles "{link_name: "panda_hand_tcp", position: {x: 0.411, y: 0.0, z: 0.0}, length: 1.125, width: 0.033, height: 0.2, id: 'gripping', type: 3, delete_obstacle: false}"
         Args:
             request (UpdateAttachedObstacles): obstacle information
 
@@ -956,61 +1036,6 @@ class MoveGroup(Node):
 
         return response
 
-    # def add_walls_callback(self, request, response):
-    #     obstacle = moveit_msgs.msg.CollisionObject()
-    #     obstacle.id = 'wall_0'
-
-    #     pose = geometry_msgs.msg.Pose()
-    #     pose.position.x = 0.75
-    #     pose.position.y = 0.75
-    #     pose.position.z = 0.0
-    #     obstacle.primitive_poses = [pose]
-
-    #     shape = shape_msgs.msg.SolidPrimitive()
-    #     shape.type = 1  # Box
-    #     shape.dimensions = [1.125, 0.25, 2.0]
-    #     obstacle.primitives = [shape]
-
-    #     obstacle.header.frame_id = self.moveit.config.base_frame_id
-    #     # self.moveit.update_persistent_obstacle(obstacle, delete=False)
-
-    #     obstacle1 = moveit_msgs.msg.CollisionObject()
-    #     obstacle1.id = 'wall_1'
-
-    #     pose1 = geometry_msgs.msg.Pose()
-    #     pose1.position.x = 0.75
-    #     pose1.position.y = -0.75
-    #     pose1.position.z = 0.0
-    #     obstacle1.primitive_poses = [pose1]
-
-    #     shape1 = shape_msgs.msg.SolidPrimitive()
-    #     shape1.type = 1  # Box
-    #     shape1.dimensions = [1.125, 0.25, 2.0]
-    #     obstacle1.primitives = [shape1]
-
-    #     obstacle1.header.frame_id = self.moveit.config.base_frame_id
-    #     # self.moveit.update_persistent_obstacle(obstacle1, delete=False)
-
-    #     obstacle2 = moveit_msgs.msg.CollisionObject()
-    #     obstacle2.id = 'wall_2'
-
-    #     pose2 = geometry_msgs.msg.Pose()
-    #     pose2.position.x = -0.75
-    #     pose2.position.y = 0.0
-    #     pose2.position.z = 0.0
-    #     obstacle2.primitive_poses = [pose2]
-
-    #     shape2 = shape_msgs.msg.SolidPrimitive()
-    #     shape2.type = 1  # Box
-    #     shape2.dimensions = [0.25, 1.125, 2.0]
-    #     obstacle2.primitives = [shape2]
-
-    #     obstacle2.header.frame_id = self.moveit.config.base_frame_id
-    #     # self.moveit.update_persistent_obstacle(obstacle2, delete=False)
-
-    #     self.moveit.update_persistent_obstacle([obstacle, obstacle1, obstacle2], delete=False)
-
-    #     return response
 
     def add_walls_callback(self, request, response):
 
@@ -1048,21 +1073,6 @@ class MoveGroup(Node):
         obstacle1.header.frame_id = self.moveit.config.base_frame_id
         # self.moveit.update_persistent_obstacle(obstacle1, delete=False)
 
-        obstacle2 = moveit_msgs.msg.CollisionObject()
-        obstacle2.id = 'arm_table'
-
-        pose2 = geometry_msgs.msg.Pose()
-        pose2.position.x = 0.0
-        pose2.position.y = 0.0
-        pose2.position.z = 0.0
-        obstacle2.primitive_poses = [pose2]
-
-        shape2 = shape_msgs.msg.SolidPrimitive()
-        shape2.type = 1  # Box
-        shape2.dimensions = [0.605, 0.3, 0.023]
-        obstacle2.primitives = [shape2]
-
-        obstacle2.header.frame_id = self.moveit.config.base_frame_id
         # self.moveit.update_persistent_obstacle(obstacle2, delete=False)
 
         obstacle3 = moveit_msgs.msg.CollisionObject()
@@ -1097,7 +1107,32 @@ class MoveGroup(Node):
 
         obstacle4.header.frame_id = self.moveit.config.base_frame_id
 
-        self.moveit.update_persistent_obstacle([obstacle, obstacle1, obstacle2, obstacle3, obstacle4], delete=False)
+        self.moveit.update_persistent_obstacle([obstacle, obstacle1, obstacle3, obstacle4], delete=False)
+
+        
+        #arm table should be attached collision object
+        attached_obstacle = moveit_msgs.msg.AttachedCollisionObject()
+        attached_obstacle.link_name = 'panda_link0'
+        attached_obstacle.object.header.frame_id = 'panda_link0'
+        attached_obstacle.object.header.stamp = self.get_clock().now().to_msg()
+        attached_obstacle.object.id = 'arm_table'
+
+        pose2 = geometry_msgs.msg.Pose()
+        pose2.position.x = 0.0
+        pose2.position.y = 0.0
+        pose2.position.z = 0.0
+        attached_obstacle.object.primitive_poses = [pose2]
+
+        shape2 = shape_msgs.msg.SolidPrimitive()
+        shape2.type = 1  # Box
+        shape2.dimensions = [0.605, 0.3, 0.023]
+        attached_obstacle.object.primitives = [shape2]
+
+        attached_obstacle.object.operation = attached_obstacle.object.ADD
+
+        attached_obstacle.touch_links = ['panda_link0', 'panda_link1']
+
+        self.moveit.update_attached_obstacles(attached_obstacle, delete=False)
 
         return response
 
