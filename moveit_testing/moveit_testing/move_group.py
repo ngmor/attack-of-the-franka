@@ -267,6 +267,8 @@ class MoveGroup(Node):
         self.table_center_x = 1.443
         self.table_center_y = -0.052
 
+        self.obstacles_added = 0
+
 
 
     def obstacle_info(self):
@@ -347,9 +349,11 @@ class MoveGroup(Node):
                 self.table_center_x = ((abs(table1.transform.translation.x - table2.transform.translation.x))/2) + table1.transform.translation.x
                 self.table_center_y = (table1.transform.translation.y + table2.transform.translation.y)/2
 
-                self.add_walls()
+                if not self.obstacles_added:
+                    self.add_walls()
+                    self.add_lightsaber()
+                    self.obstacles_added = 1
                 self.state = State.FIND_ALLIES
-                self.add_lightsaber()
 
         elif self.state == State.FIND_ALLIES:
             try:
