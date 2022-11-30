@@ -289,7 +289,7 @@ class CameraProcessor(Node):
         self.contours_filtered_enemy = []
 
         self.ally_hsv = HSVLimits('Ally',self.ally_mask_window_name,[100,57,120],[142,255,255],self.enable_ally_sliders)
-        self.enemy_hsv = HSVLimits('Enemy',self.enemy_mask_window_name,[0,193,90],[9,255,255],self.enable_enemy_sliders)
+        self.enemy_hsv = HSVLimits('Enemy',self.enemy_mask_window_name,[169,81,167],[180,255,255],self.enable_enemy_sliders)
 
         self.static_broadcaster = StaticTransformBroadcaster(self)
         self.broadcaster = TransformBroadcaster(self)

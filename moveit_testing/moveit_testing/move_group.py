@@ -33,7 +33,7 @@ import math
 from tf2_ros.buffer import Buffer
 from tf2_ros.transform_listener import TransformListener
 from tf2_ros import TransformException
-from attack_of_the_franka.common import FRAMES
+from attack_of_the_franka.common import FRAMES, angle_axis_to_quaternion
 from rcl_interfaces.msg import ParameterDescriptor
 
 
@@ -268,6 +268,7 @@ class MoveGroup(Node):
         self.table_center_y = -0.052
 
 
+
     def obstacle_info(self):
         """
         Get robot transformation from base frame to end-effector frame.
@@ -446,13 +447,21 @@ class MoveGroup(Node):
                 self.goal_waypoint = geometry_msgs.msg.Pose()
 
                 self.goal_waypoint.position.x = enemy00.transform.translation.x - (self.lightsaber_full_length*0.75)
-                self.goal_waypoint.position.y = enemy00.transform.translation.y
-                self.goal_waypoint.position.z = -self.table_offset + height  #(table.transform.translation.z - enemy00.transform.translation.z)/2
-                self.goal_waypoint.orientation.x = math.pi
+                self.goal_waypoint.position.y = enemy00.transform.translation.y + 0.16            #adding slight offset (slightly more than half the block width)
+                self.goal_waypoint.position.z = -self.table_offset + height + 0.18
 
+                orientation = angle_axis_to_quaternion(math.pi, [1,0,0])
+                self.goal_waypoint.orientation.x = math.pi
+                self.goal_waypoint.orientation.z = -math.pi/16
+
+                self.knock_enemy_waypoint = geometry_msgs.msg.Pose()
+                self.knock_enemy_waypoint.position.x = enemy00.transform.translation.x - (self.lightsaber_full_length*0.75)
+                self.knock_enemy_waypoint.position.y = enemy00.transform.translation.y + 0.0725            #adding slight offset (slightly more than half the block width)
+                self.knock_enemy_waypoint.position.z = -self.table_offset + height + 0.18
+                self.knock_enemy_waypoint.orientation.x = math.pi
+                self.knock_enemy_waypoint.orientation.z = -math.pi/16
 
         elif self.state == State.WAYPOINTS:
-
             if self.moveit.planning:
                 self.state = State.WAYPOINTS_WAIT
             else:
@@ -460,6 +469,7 @@ class MoveGroup(Node):
                 #self.moveit.check_planning_scene(self.goal_waypoint)
                 # if ___:
                 self.moveit.plan_traj_to_pose(self.goal_waypoint)
+                self.waypoints += 1
                 #self.moveit.joint_waypoints(self.waypoint_joints)
 
         elif self.state == State.WAYPOINTS_WAIT:
@@ -480,15 +490,18 @@ class MoveGroup(Node):
                     self.state = State.IDLE
 
         elif self.state == State.NEXT_WAYPOINT:
-                if self.home_waypoint == True:
-                    self.state = State.IDLE
-                    self.home_waypoint = False
-                elif self.ind < self.i:
-                    self.ind += 1
-                    self.waypoint_poses()
-                    self.state = State.WAYPOINTS
-                else:
-                    self.state = State.IDLE
+                # if self.home_waypoint == True:
+                #     self.state = State.IDLE
+                #     self.home_waypoint = False
+                # elif self.ind < self.i:
+                #     self.ind += 1
+                #     self.waypoint_poses()
+                #     self.state = State.WAYPOINTS
+                # else:
+                #     self.state = State.IDLE
+                self.goal_waypoint = self.knock_enemy_waypoint
+                self.get_logger().info("next waypoint!")
+                self.state = State.WAYPOINTS
 
         elif self.state == State.PLAN_TO_POSE_START:
 
@@ -564,6 +577,7 @@ class MoveGroup(Node):
                 if self.waypoints == 1:
                     self.state = State.NEXT_WAYPOINT
                 else:
+                    self.get_logger().info("done!")
                     self.state = State.MOVE_TO_HOME_START
 
     def move_to_home_callback(self, request, response):
