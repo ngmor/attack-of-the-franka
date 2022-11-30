@@ -349,10 +349,9 @@ class MoveGroup(Node):
                 self.table_center_x = ((abs(table1.transform.translation.x - table2.transform.translation.x))/2) + table1.transform.translation.x
                 self.table_center_y = (table1.transform.translation.y + table2.transform.translation.y)/2
 
-                if not self.obstacles_added:
-                    self.add_walls()
-                    self.add_lightsaber()
-                    self.obstacles_added = 1
+                self.add_walls()
+                self.add_lightsaber()
+                self.obstacles_added = 1
                 self.state = State.FIND_ALLIES
 
         elif self.state == State.FIND_ALLIES:
@@ -610,7 +609,10 @@ class MoveGroup(Node):
         return response
 
     def look_for_enemy_callback(self, request, response):
-        self.state = State.SETUP
+        if not self.obstacle_future:
+            self.state = State.SETUP
+        else:
+            self.state = State.FIND_ALLIES
         return response
 
     def grip_open_close_callback(self, request, response):
