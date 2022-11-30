@@ -175,28 +175,28 @@ class MoveGroup(Node):
         self.lightsaber_gripper_height = self.get_parameter("lightsaber.gripper_height").get_parameter_value().double_value
         self.table_offset = 0.091
         # Initialize API class
-        config = MoveConfig()
-        config.base_frame_id = 'panda_link0'
-        config.workspace_min_corner = geometry_msgs.msg.Vector3(
+        self.config = MoveConfig()
+        self.config.base_frame_id = 'panda_link0'
+        self.config.workspace_min_corner = geometry_msgs.msg.Vector3(
             x=-3.0,
             y=-3.0,
             z=-3.0
         )
-        config.workspace_max_corner = geometry_msgs.msg.Vector3(
+        self.config.workspace_max_corner = geometry_msgs.msg.Vector3(
             x=3.0,
             y=3.0,
             z=3.0
         )
-        config.tolerance = 0.01
-        config.max_velocity_scaling_factor = 0.3
-        config.group_name = 'panda_manipulator'
+        self.config.tolerance = 0.01
+        self.config.max_velocity_scaling_factor = 0.3
+        self.config.group_name = 'panda_manipulator'
 
         self.home_pose = geometry_msgs.msg.Pose()
         self.waypoint_joints = []
 
         # Select end effector attributes based on group name
-        if config.group_name == 'panda_arm':
-            config.ee_frame_id = 'panda_link8'  # end effector frame for panda_arm
+        if self.config.group_name == 'panda_arm':
+            self.config.ee_frame_id = 'panda_link8'  # end effector frame for panda_arm
             self.home_pose.position.x = 0.30691
             self.home_pose.position.y = 0.0
             self.home_pose.position.z = 0.590282
@@ -204,8 +204,8 @@ class MoveGroup(Node):
             self.home_pose.orientation.y = -0.382683
             self.home_pose.orientation.z = 8.32667e-17
             self.home_pose.orientation.w = 8.32667e-17
-        elif config.group_name == 'panda_manipulator':
-            config.ee_frame_id = 'panda_hand_tcp'  # end effector frame for panda_manipulator
+        elif self.config.group_name == 'panda_manipulator':
+            self.config.ee_frame_id = 'panda_hand_tcp'  # end effector frame for panda_manipulator
             self.home_pose.position.x = 0.306891
             self.home_pose.position.y = -8.32667e-17
             self.home_pose.position.z = 0.486882
@@ -214,7 +214,7 @@ class MoveGroup(Node):
             self.home_pose.orientation.z = 2.22045e-16
             self.home_pose.orientation.w = -6.93889e-17
 
-        config.home_joint_positions = [
+        self.config.home_joint_positions = [
             0.0,                    # panda_joint1
             -0.7853981633974483,    # panda_joint2
             0.0,                    # panda_joint3
@@ -232,7 +232,7 @@ class MoveGroup(Node):
 
         
 
-        self.moveit = MoveIt(self, config)
+        self.moveit = MoveIt(self, self.config)
 
         self.goal_pose = geometry_msgs.msg.Pose()
         self.goal_waypoint = geometry_msgs.msg.Pose()
