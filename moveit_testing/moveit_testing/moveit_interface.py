@@ -375,6 +375,7 @@ class MoveIt():
 
         """
         self._joint_states = msg
+      #  self._node.get_logger().info(f'start: {self._joint_states}')
 
     def _obs_sequence(self):
         """
@@ -395,8 +396,8 @@ class MoveIt():
 
         if new_state:
             # TODO - change to debug level
-            self._node.get_logger().info(
-                f"MoveIt object sequence changed to {self._obs_state.name}")
+           # self._node.get_logger().info(
+            #    f"MoveIt object sequence changed to {self._obs_state.name}")
             self._obs_state_last = self._obs_state
 
         if self._obs_state == _ObstacleState.IDLE:
@@ -412,10 +413,10 @@ class MoveIt():
             if self.obstacle_future.done():
                 self._planning_scene = copy.deepcopy(self.obstacle_future.result().scene)
                 if self._attached_obstacles:
-                    self._node.get_logger().info(
-                    f"Attached obstacles message {self._planning_scene.robot_state}")
-                    self._node.get_logger().info(
-                    f"Length of attached obstacles message {len(self._planning_scene.robot_state.attached_collision_objects)}")
+                    # self._node.get_logger().info(
+                    # f"Attached obstacles message {self._planning_scene.robot_state}")
+                    # self._node.get_logger().info(
+                    # f"Length of attached obstacles message {len(self._planning_scene.robot_state.attached_collision_objects)}")
                     # self._node.get_logger().info(
                     # f"First element of attached obstacles message {self._planning_scene.robot_state.attached_collision_objects[0]}")
                     # self._node.get_logger().info(
@@ -1118,7 +1119,7 @@ class MoveIt():
         self._goal_joint_states.position = copy.deepcopy(waypoint)
 
         # Execute immediately after planning
-        self._plan_and_execute = True
+        self._plan_and_execute = False
 
         # Skip IK
         # TODO - may want a more general way of doing this if we want to skip IK for other reasons?

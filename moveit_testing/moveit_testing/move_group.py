@@ -228,7 +228,7 @@ class MoveGroup(Node):
             0.0                 # 0.035, 0.0 panda_finger_joint2
         ]
 
-        self.waypoint_joints = [math.radians(3), math.radians(-35), math.radians(31), math.radians(-111), math.radians(17), math.radians(81), math.radians(77), 0.035, 0.035]
+        self.waypoint_joints = []
 
         
 
@@ -268,6 +268,8 @@ class MoveGroup(Node):
         self.table_center_y = -0.052
 
         self.obstacles_added = 0
+
+        self.is_waypoint = True
 
 
 
@@ -315,6 +317,34 @@ class MoveGroup(Node):
         """
         # call MoveIt handler
         self.moveit.handle()
+
+        try:
+            ally00 = self.tf_buffer.lookup_transform(FRAMES.PANDA_BASE, FRAMES.ALLY + '00', rclpy.time.Time())
+            obstacle = moveit_msgs.msg.CollisionObject()
+            obstacle.id = FRAMES.ALLY + '00'
+
+            shape = shape_msgs.msg.SolidPrimitive()
+            shape.type = 1  # Box
+            length = 0.078
+            width = 0.105
+            height = 0.2286
+            shape.dimensions = [length, width, height]
+            obstacle.primitives = [shape]
+
+            pose = geometry_msgs.msg.Pose()
+            pose.position.x = ally00.transform.translation.x
+            pose.position.y = ally00.transform.translation.y
+            pose.position.z = -self.table_offset + (height/2) #table.transform.translation.z 0.115
+            obstacle.primitive_poses = [pose]
+
+            obstacle.header.frame_id = self.moveit.config.base_frame_id
+
+
+            self.moveit.update_obstacles([obstacle], delete=False)
+        except TransformException:
+            pass
+
+        
 
 
         # State machine
@@ -368,33 +398,35 @@ class MoveGroup(Node):
                 table_here = False
                 return
 
-            if ally00_here and table_here:
-                obstacle = moveit_msgs.msg.CollisionObject()
-                obstacle.id = FRAMES.ALLY + '00'
+            # if ally00_here: # and table_here:
+            self.get_logger().info('AHHHHHHHH')
+            obstacle = moveit_msgs.msg.CollisionObject()
+            obstacle.id = FRAMES.ALLY + '00'
 
-                shape = shape_msgs.msg.SolidPrimitive()
-                shape.type = 1  # Box
-                length = 0.078
-                width = 0.105
-                height = -(table.transform.translation.z - ally00.transform.translation.z)
-                shape.dimensions = [length, width, height]
-                obstacle.primitives = [shape]
+            shape = shape_msgs.msg.SolidPrimitive()
+            shape.type = 1  # Box
+            length = 0.078
+            width = 0.105
+            height = 0.2286 #-(table.transform.translation.z - ally00.transform.translation.z)
+            shape.dimensions = [length, width, height]
+            obstacle.primitives = [shape]
 
-                pose = geometry_msgs.msg.Pose()
-                pose.position.x = ally00.transform.translation.x
-                pose.position.y = ally00.transform.translation.y
-                pose.position.z = -0.091 + (height/2) #table.transform.translation.z 0.115
-                obstacle.primitive_poses = [pose]
+            pose = geometry_msgs.msg.Pose()
+            pose.position.x = ally00.transform.translation.x
+            pose.position.y = ally00.transform.translation.y
+            pose.position.z = -0.091 + (height/2) #table.transform.translation.z 0.115
+            obstacle.primitive_poses = [pose]
 
-                obstacle.header.frame_id = self.moveit.config.base_frame_id
+            obstacle.header.frame_id = self.moveit.config.base_frame_id
 
 
-                self.moveit.update_obstacles([obstacle], delete=False)
+            self.moveit.update_obstacles([obstacle], delete=False)
 
-                self.state = State.LOOK_FOR_ENEMY
+            self.state = State.LOOK_FOR_ENEMY
 
 
         elif self.state == State.LOOK_FOR_ENEMY:
+            self.waypoints = 0
             if self.moveit._state == self.moveit._state.IDLE:
                 try:
                     ally00 = self.tf_buffer.lookup_transform(FRAMES.PANDA_BASE, FRAMES.ALLY + '00', rclpy.time.Time())
@@ -406,6 +438,7 @@ class MoveGroup(Node):
                     return
                 try:
                     enemy00 = self.tf_buffer.lookup_transform(FRAMES.PANDA_BASE, FRAMES.ENEMY + '00', rclpy.time.Time())
+                    rotate = math.atan2(enemy00.transform.translation.y,enemy00.transform.translation.x)
                     self.state = State.WAYPOINTS
                 except TransformException:
                     return
@@ -450,21 +483,36 @@ class MoveGroup(Node):
                 # Come in from center
                 #####################################
                 #goal waypoint
-                self.goal_waypoint = geometry_msgs.msg.Pose()
+                self.is_waypoint = False
+                self.waypoint_joints = [rotate,        #ONLY CHANGE THIS ONE(rotate panda_joint1)
+                                        -0.7853981633974483,    # panda_joint2
+                                        0.0,                    # panda_joint3
+                                        -2.356194490192345,     # panda_joint4
+                                        0.0,                    # panda_joint5
+                                        (math.pi*5)/6,     # panda_joint6
+                                        0.7853981633974483,     # panda_joint7
+                                                                # TODO - This might open the gripper when we try to move home
+                                                                # CAREFUL!
+                                        0.0,                  # 0.035, 0.0 panda_finger_joint1
+                                        0.0   
+                                        ]
+                # self.goal_waypoint = geometry_msgs.msg.Pose()
 
-                self.goal_waypoint.position.x = enemy00.transform.translation.x - (self.lightsaber_full_length)        #leave a little buffer
-                self.goal_waypoint.position.y = enemy00.transform.translation.y            #adding slight offset (slightly more than half the block width)
-                self.goal_waypoint.position.z = -self.table_offset + height*0.9
+                # self.goal_waypoint.position.x = enemy00.transform.translation.x - (self.lightsaber_full_length)        #leave a little buffer
+                # self.goal_waypoint.position.y = enemy00.transform.translation.y            #adding slight offset (slightly more than half the block width)
+                # self.goal_waypoint.position.z = -self.table_offset + height*1.5
+                # self.get_logger().info(f'{self.goal_waypoint}')
 
-                self.goal_waypoint.orientation.x = math.pi
-                self.goal_waypoint.orientation.z = -math.pi
+                # self.goal_waypoint.orientation.x = math.pi*1.3
+                # self.goal_waypoint.orientation.y = 0.0
+                # self.goal_waypoint.orientation.z = -math.pi/16
 
                 self.knock_enemy_waypoint = geometry_msgs.msg.Pose()
-                self.knock_enemy_waypoint.position.x = enemy00.transform.translation.x - (self.lightsaber_full_length*0.75)
-                self.knock_enemy_waypoint.position.y = enemy00.transform.translation.y + 0.0725            #adding slight offset (slightly more than half the block width)
-                self.knock_enemy_waypoint.position.z = -self.table_offset + height + 0.18
+                self.knock_enemy_waypoint.position.x = enemy00.transform.translation.x - (self.lightsaber_full_length) 
+                self.knock_enemy_waypoint.position.y = enemy00.transform.translation.y
+                self.knock_enemy_waypoint.position.z = -self.table_offset + height*2
                 self.knock_enemy_waypoint.orientation.x = math.pi
-                self.knock_enemy_waypoint.orientation.z = -math.pi
+                self.knock_enemy_waypoint.orientation.z = -math.pi/16
 
 
                 #####################################
@@ -495,9 +543,14 @@ class MoveGroup(Node):
                 #add wait for collision object to be in planning scene before plan! (new state?)
                 #self.moveit.check_planning_scene(self.goal_waypoint)
                 # if ___:
-                self.moveit.plan_traj_to_pose(self.goal_waypoint)
-                # self.waypoints += 1
-                #self.moveit.joint_waypoints(self.waypoint_joints)
+                if self.is_waypoint:
+                    self.get_logger().info("CORRECT!")
+                    self.moveit.plan_traj_to_pose(self.goal_waypoint)
+                else:
+                    self.get_logger().info("MF!")
+                    self.moveit.joint_waypoints(self.waypoint_joints)
+                    self.is_waypoint = True
+                self.waypoints += 1
 
         elif self.state == State.WAYPOINTS_WAIT:
             # once we're not planning anymore, get the plan and move on to execute stage
@@ -625,10 +678,12 @@ class MoveGroup(Node):
         
         TODO finish docstring
         """
+        self.get_logger().info("WHAT")
         # no longer necessary since we're using the API home function
         self.goal_pose = copy.deepcopy(self.home_pose)
 
         self.state = State.MOVE_TO_HOME_START
+        self.get_logger().info("WHAT")
 
         return response
 
