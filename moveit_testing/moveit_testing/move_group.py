@@ -431,7 +431,7 @@ class MoveGroup(Node):
                 shape.type = 1  # Box
                 length = 0.078
                 width = 0.105
-                height = -(table.transform.translation.z - ally00.transform.translation.z)
+                height = 0.2286
                 shape.dimensions = [length, width, height]
                 obstacle.primitives = [shape]
 
@@ -446,24 +446,30 @@ class MoveGroup(Node):
 
                 self.moveit.update_obstacles([obstacle], delete=False)
 
+                #####################################
+                # Come in from center
+                #####################################
                 #goal waypoint
                 self.goal_waypoint = geometry_msgs.msg.Pose()
 
-                self.goal_waypoint.position.x = enemy00.transform.translation.x - (self.lightsaber_full_length*0.75)
-                self.goal_waypoint.position.y = enemy00.transform.translation.y           #adding slight offset (slightly more than half the block width)
-                self.goal_waypoint.position.z = -self.table_offset + height + 0.18
+                self.goal_waypoint.position.x = enemy00.transform.translation.x - (self.lightsaber_full_length)        #leave a little buffer
+                self.goal_waypoint.position.y = enemy00.transform.translation.y            #adding slight offset (slightly more than half the block width)
+                self.goal_waypoint.position.z = -self.table_offset + height*0.9
 
-                orientation = angle_axis_to_quaternion(math.pi, [1,0,0])
                 self.goal_waypoint.orientation.x = math.pi
-                self.goal_waypoint.orientation.z = -math.pi/16
+                self.goal_waypoint.orientation.z = -math.pi
 
                 self.knock_enemy_waypoint = geometry_msgs.msg.Pose()
                 self.knock_enemy_waypoint.position.x = enemy00.transform.translation.x - (self.lightsaber_full_length*0.75)
                 self.knock_enemy_waypoint.position.y = enemy00.transform.translation.y + 0.0725            #adding slight offset (slightly more than half the block width)
                 self.knock_enemy_waypoint.position.z = -self.table_offset + height + 0.18
                 self.knock_enemy_waypoint.orientation.x = math.pi
-                self.knock_enemy_waypoint.orientation.z = -math.pi/16
+                self.knock_enemy_waypoint.orientation.z = -math.pi
 
+
+                #####################################
+                # Come in from right
+                #####################################
                 # #goal waypoint
                 # self.goal_waypoint = geometry_msgs.msg.Pose()
 
@@ -490,7 +496,7 @@ class MoveGroup(Node):
                 #self.moveit.check_planning_scene(self.goal_waypoint)
                 # if ___:
                 self.moveit.plan_traj_to_pose(self.goal_waypoint)
-                self.waypoints += 1
+                # self.waypoints += 1
                 #self.moveit.joint_waypoints(self.waypoint_joints)
 
         elif self.state == State.WAYPOINTS_WAIT:
@@ -627,7 +633,7 @@ class MoveGroup(Node):
         return response
 
     def look_for_enemy_callback(self, request, response):
-        if not self.obstacle_future:
+        if not self.obstacles_added:
             self.state = State.SETUP
         else:
             self.state = State.FIND_ALLIES
