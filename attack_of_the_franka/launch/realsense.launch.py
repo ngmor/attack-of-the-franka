@@ -58,17 +58,17 @@ def generate_launch_description():
             [FindPackageShare('attack_of_the_franka'), 'parameters.yaml'])],
         ),
         # RVIZ node for viewing the robot only
-        Node(
-            package='rviz2',
-            executable='rviz2',
-            output='screen',
-            condition=IfCondition(LaunchConfiguration('launch_rviz')),
-            arguments=[
-                '-d',
-                PathJoinSubstitution([
-                    FindPackageShare('attack_of_the_franka'),
-                    'apriltag.rviz'
-                ])
-            ]
-        ),
+            Node(
+                package='rviz2',
+                executable='rviz2',
+                output='screen',
+                condition=IfCondition(LaunchConfiguration('launch_rviz')),
+                arguments=[
+                    '-d',
+                    PathJoinSubstitution([
+                        FindPackageShare('attack_of_the_franka'),
+                        'apriltag.rviz'
+                    ])
+                ]
+            ),
     ])
