@@ -33,8 +33,9 @@ import math
 from tf2_ros.buffer import Buffer
 from tf2_ros.transform_listener import TransformListener
 from tf2_ros import TransformException
-from attack_of_the_franka.common import FRAMES, angle_axis_to_quaternion
+from attack_of_the_franka.common import FRAMES, angle_axis_to_quaternion, ObjectType
 from rcl_interfaces.msg import ParameterDescriptor
+from attack_of_the_franka_interfaces.msg import Detections, DetectedObject
 
 
 class State(Enum):
@@ -56,6 +57,11 @@ class State(Enum):
     SETUP = auto(),
     FIND_ALLIES = auto()
 
+class DetectedObjectData():
+
+    def __init__(self, obj):
+        self.obj = obj
+        self.tf = None
 
 class MoveGroup(Node):
     """
@@ -81,6 +87,7 @@ class MoveGroup(Node):
         self.timer = self.create_timer(self.interval, self.timer_callback)
         self.pub_joint_traj = self.create_publisher(trajectory_msgs.msg.JointTrajectory,
                                                     'panda_arm_controller/joint_trajectory', 10)
+        self.sub_obj_detections = self.create_subscription(Detections,'object_detections',self.obj_detection_callback,10)
         self.srv_move_to_home = self.create_service(std_srvs.srv.Empty,
                                                     'move_to_home', self.move_to_home_callback)
         self.grip_open_close = self.create_service(std_srvs.srv.Empty,
@@ -270,6 +277,9 @@ class MoveGroup(Node):
         self.obstacles_added = 0
 
         self.is_waypoint = True
+        self.detected_objects = None
+        self.detected_allies = []
+        self.detected_enemies = []
 
 
 
@@ -1567,6 +1577,58 @@ class MoveGroup(Node):
 
         return response
 
+    def obj_detection_callback(self, data):
+
+        self.detected_objects = data
+
+    def update_detected_objects(self, object_type):
+        
+        if self.detected_objects is None:
+            return False
+
+        all_transforms_found = True
+
+        if object_type == ObjectType.ALLY:
+            
+            self.detected_allies = []
+
+            # Populate array with instances of class that stores the object information and
+            # It's transform (if it can be found)
+            for ally in self.detected_objects.allies:
+                # Init object data
+                obj_data = DetectedObjectData(ally)
+
+                # Try to get the transform for the detected object
+                try:
+                    obj_data.tf = self.tf_buffer.lookup_transform(FRAMES.PANDA_BASE, obj_data.obj.name, rclpy.time.Time())
+                except TransformException:
+                    all_transforms_found = False
+
+                # Append object data to array
+                self.detected_allies.append(obj_data)
+
+
+        elif object_type == ObjectType.ENEMY:
+            
+            self.detected_enemies = []
+
+            # Populate array with instances of class that stores the object information and
+            # It's transform (if it can be found)
+            for enemy in self.detected_objects.enemies:
+                # Init object data
+                obj_data = DetectedObjectData(enemy)
+
+                # Try to get the transform for the detected object
+                try:
+                    obj_data.tf = self.tf_buffer.lookup_transform(FRAMES.PANDA_BASE, obj_data.obj.name, rclpy.time.Time())
+                except TransformException:
+                    all_transforms_found = False
+
+                # Append object data to array
+                self.detected_enemies.append(obj_data)
+        
+        # Indicate if all transforms were found
+        return all_transforms_found
 
 def movegroup_entry(args=None):
     rclpy.init(args=args)

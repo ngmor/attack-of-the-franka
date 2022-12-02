@@ -14,6 +14,7 @@ from geometry_msgs.msg import TransformStamped
 from tf2_ros.buffer import Buffer
 from tf2_ros.transform_listener import TransformListener
 from attack_of_the_franka.common import FRAMES, angle_axis_to_quaternion, ObjectType
+from attack_of_the_franka_interfaces.msg import DetectedObject, Detections
 
 camera_scale_factor = 1.0 / 1000.0
 
@@ -126,8 +127,9 @@ class HSVLimits():
         cv2.setTrackbarPos(self.upper_names.V,self.window_name,self.upper.V)
 
 class ContourData():
-    def __init__(self,contour):
+    def __init__(self, contour, object_type):
         self.contour = contour
+        self.object_type = object_type
 
         self.moments = cv2.moments(self.contour)
         self.centroid = Pixel()
@@ -177,31 +179,43 @@ class ContourData():
                     (self.coord.z >= z_limits.lower) and
                     (self.coord.z <= z_limits.upper))
 
-    def broadcast(self,broadcaster,number,time,object_type):
+    def get_frame_name(self, number):
+        """Get the frame name of the object by inputting which number it is."""
+
+        if self.object_type == ObjectType.ALLY:
+            name = FRAMES().ALLY
+        elif self.object_type == ObjectType.ENEMY:
+            name = FRAMES().ENEMY
+        else:
+            name = ''
+
+        name += f'{number:02d}'
+
+        return name
+
+    def broadcast(self,broadcaster,number,time):
         """Broadcast the transform to the frame at the location of the centroid of the contour."""
         if self.coord is None:
             return
         
         transform = TransformStamped()
         transform.header.frame_id = FRAMES().CAMERA_COLOR
-
-        if object_type == ObjectType.ALLY:
-            transform.child_frame_id = FRAMES().ALLY
-        elif object_type == ObjectType.ENEMY:
-            transform.child_frame_id = FRAMES().ENEMY
-        else:
-            transform.child_frame_id = ''
-
-
-        transform.child_frame_id += f'{number:02d}'
-
+        transform.child_frame_id = self.get_frame_name(number)
         transform.transform.translation.x = self.coord.x
         transform.transform.translation.y = self.coord.y
         transform.transform.translation.z = self.coord.z
         transform.transform.rotation = angle_axis_to_quaternion(-np.pi/2.,[0.,1.,0.])
-
         transform.header.stamp = time
+
         broadcaster.sendTransform(transform)
+
+    def get_as_detection_object(self, number):
+        """Returns information about the contour as a DetectedObject."""
+
+        return DetectedObject(
+            name=self.get_frame_name(number)
+            # TODO add more information?
+        )
 
 
 class CameraProcessor(Node):
@@ -213,6 +227,7 @@ class CameraProcessor(Node):
 
         self.interval = 1.0 / 30.0 #30 fps
         self.timer = self.create_timer(self.interval, self.timer_callback)
+        self.pub_object_detections = self.create_publisher(Detections, 'object_detections', 10)
         self.sub_color_image = self.create_subscription(sensor_msgs.msg.Image,'/camera/color/image_raw',self.color_image_callback,10)
         self.sub_color_camera_info = self.create_subscription(sensor_msgs.msg.CameraInfo,'/camera/color/camera_info',self.color_info_callback,10)
         self.sub_aligned_depth_image = self.create_subscription(sensor_msgs.msg.Image,'/camera/aligned_depth_to_color/image_raw',self.aligned_depth_image_callback,10)
@@ -345,15 +360,15 @@ class CameraProcessor(Node):
         opening_then_closing_ally = cv2.morphologyEx(opening_ally, cv2.MORPH_CLOSE, kernel)
         contours_ally, hierarchy_ally = cv2.findContours(opening_then_closing_ally, cv2.RETR_TREE, cv2.CHAIN_APPROX_SIMPLE)
 
+        self.contours_filtered_ally = []
 
         # Make sure we have contours
         if len(contours_ally) > 0:
-            self.contours_filtered_ally = []
 
             # Iterate through contours to process and filter them
             for contour in contours_ally:
                 if cv2.contourArea(contour) > self.area_threshold:
-                    contour_data = ContourData(contour)
+                    contour_data = ContourData(contour, ObjectType.ALLY)
 
                     # Only add contour to list if it is valid
                     if contour_data.valid:
@@ -388,13 +403,14 @@ class CameraProcessor(Node):
         opening_then_closing_enemy = cv2.morphologyEx(opening_enemy, cv2.MORPH_CLOSE, kernel)
         contours_enemy, hierarchy_enemy = cv2.findContours(opening_then_closing_enemy, cv2.RETR_TREE, cv2.CHAIN_APPROX_SIMPLE)
 
+        self.contours_filtered_enemy = []
+
         # Make sure we have contours
         if len(contours_enemy) > 0:
-            self.contours_filtered_enemy = []
 
             for contour in contours_enemy:
                 if cv2.contourArea(contour) > self.area_threshold:
-                    contour_data = ContourData(contour)
+                    contour_data = ContourData(contour, ObjectType.ENEMY)
 
                     # Only add contour to list if it is valid
                     if contour_data.valid:
@@ -425,7 +441,11 @@ class CameraProcessor(Node):
         if self.enable_enemy_sliders:
             cv2.imshow(self.enemy_mask_window_name, mask_enemy)
 
-        # add contours to image
+        time = self.get_clock().now().to_msg()
+
+        detections = Detections()
+
+        # Contour output to image, other places
         for i, contour in enumerate(self.contours_filtered_ally):
             # Add contours to image
             color_image_with_tracking = cv2.drawContours(color_image_with_tracking, [contour.contour], 0, (255,0,0), 3)
@@ -435,7 +455,14 @@ class CameraProcessor(Node):
 
             color_image_with_tracking = cv2.putText(color_image_with_tracking, f'{i}',(contour.centroid.x - 5,contour.centroid.y + 5),cv2.FONT_HERSHEY_DUPLEX,0.5,(255,255,255))
 
-        # add contours to image
+            # Broadcast transforms directly from this node
+            if self.broadcast_transforms_directly:
+                contour.broadcast(self.broadcaster,i,time)
+
+            # Store for publishing
+            detections.allies.append(contour.get_as_detection_object(i))
+
+        # Contour output to image, other places
         for i, contour in enumerate(self.contours_filtered_enemy):
             # Add contours to image
             color_image_with_tracking = cv2.drawContours(color_image_with_tracking, [contour.contour], 0, (0,0,255), 3)
@@ -444,6 +471,16 @@ class CameraProcessor(Node):
             color_image_with_tracking = cv2.circle(color_image_with_tracking, (contour.centroid.x,contour.centroid.y), radius=10, color=(0, 0, 255), thickness=-1)
 
             color_image_with_tracking = cv2.putText(color_image_with_tracking, f'{i}',(contour.centroid.x - 5,contour.centroid.y + 5),cv2.FONT_HERSHEY_DUPLEX,0.5,(255,255,255))
+
+            # Broadcast transforms directly from this node
+            if self.broadcast_transforms_directly:
+                contour.broadcast(self.broadcaster,i,time)
+
+            # Store for publishing
+            detections.enemies.append(contour.get_as_detection_object(i))
+
+        # Publish detections
+        self.pub_object_detections.publish(detections)
 
         # Add work area bounds to image
         if self.enable_work_area_sliders:
@@ -455,19 +492,7 @@ class CameraProcessor(Node):
         color_image_with_tracking = cv2.putText(color_image_with_tracking, f'Allies: {len(self.contours_filtered_ally)}',(50,50),cv2.FONT_HERSHEY_DUPLEX,1,(255,0,0))
         color_image_with_tracking = cv2.putText(color_image_with_tracking, f'Enemies: {len(self.contours_filtered_enemy)}',(50,100),cv2.FONT_HERSHEY_DUPLEX,1,(0,0,255))
 
-        cv2.imshow(self.color_window_name,color_image_with_tracking)
-
-       # Broadcast transforms directly from this node
-        if self.broadcast_transforms_directly:
-            time = self.get_clock().now().to_msg()
-
-            for i, contour in enumerate(self.contours_filtered_ally):
-                contour.broadcast(self.broadcaster,i,time,ObjectType.ALLY)
-
-            for i, contour in enumerate(self.contours_filtered_enemy):
-                contour.broadcast(self.broadcaster,i,time,ObjectType.ENEMY)
-        
-        
+        cv2.imshow(self.color_window_name, color_image_with_tracking)
         cv2.waitKey(1)
     
     def get_transforms(self):
