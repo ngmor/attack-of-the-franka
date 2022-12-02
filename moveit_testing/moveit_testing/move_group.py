@@ -1493,6 +1493,9 @@ class MoveGroup(Node):
 
     def update_detected_objects(self, object_type):
         
+        if self.detected_objects is None:
+            return False
+
         all_transforms_found = True
 
         if object_type == ObjectType.ALLY:
