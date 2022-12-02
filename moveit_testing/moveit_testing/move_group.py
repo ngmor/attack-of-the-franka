@@ -344,7 +344,6 @@ class MoveGroup(Node):
         except TransformException:
             pass
 
-        
 
 
         # State machine
@@ -475,7 +474,7 @@ class MoveGroup(Node):
                 obstacle.primitive_poses = [pose]
 
                 obstacle.header.frame_id = self.moveit.config.base_frame_id
-
+                x_dist = enemy00.transform.translation.x - table1.transform.translation.x + 0.1     #add buffer offset
 
                 self.moveit.update_obstacles([obstacle], delete=False)
 
@@ -496,6 +495,33 @@ class MoveGroup(Node):
                                         0.0,                  # 0.035, 0.0 panda_finger_joint1
                                         0.0   
                                         ]
+
+                self.waypoint_joints2 = [rotate,        #ONLY CHANGE THIS ONE(rotate panda_joint1)
+                                        math.radians(-50),    # panda_joint2
+                                        math.radians(-1),                    # panda_joint3
+                                        math.radians(-165),     # panda_joint4
+                                        math.radians(0),                    # panda_joint5
+                                        math.radians(108),     # panda_joint6
+                                        math.radians(45),     # panda_joint7
+                                                                # TODO - This might open the gripper when we try to move home
+                                                                # CAREFUL!
+                                        0.0,                  # 0.035, 0.0 panda_finger_joint1
+                                        0.0   
+                                        ]
+
+
+                self.waypoint_joints3 = [rotate,        #ONLY CHANGE THIS ONE(rotate panda_joint1)
+                                        math.radians(-50 + ((100/0.4826)*x_dist)),    # panda_joint2     0.4826 meters is width of block table and 107 deg is the total degrees this joint changes to reach end of table
+                                        math.radians(-1),                    # panda_joint3
+                                        math.radians(-165 + ((100/0.4826)*x_dist)),     # panda_joint4
+                                        math.radians(0),       # panda_joint5
+                                        math.radians(108 - ((8/0.4826)*x_dist)),     # panda_joint6
+                                        math.radians(45),     # panda_joint7
+                                                                # TODO - This might open the gripper when we try to move home
+                                                                # CAREFUL!
+                                        0.0,                  # 0.035, 0.0 panda_finger_joint1
+                                        0.0   
+                                        ]
                 # self.goal_waypoint = geometry_msgs.msg.Pose()
 
                 # self.goal_waypoint.position.x = enemy00.transform.translation.x - (self.lightsaber_full_length)        #leave a little buffer
@@ -507,12 +533,13 @@ class MoveGroup(Node):
                 # self.goal_waypoint.orientation.y = 0.0
                 # self.goal_waypoint.orientation.z = -math.pi/16
 
-                self.knock_enemy_waypoint = geometry_msgs.msg.Pose()
-                self.knock_enemy_waypoint.position.x = enemy00.transform.translation.x - (self.lightsaber_full_length) 
-                self.knock_enemy_waypoint.position.y = enemy00.transform.translation.y
-                self.knock_enemy_waypoint.position.z = -self.table_offset + height*2
-                self.knock_enemy_waypoint.orientation.x = math.pi
-                self.knock_enemy_waypoint.orientation.z = -math.pi/16
+                # self.knock_enemy_waypoint = geometry_msgs.msg.Pose()
+                # self.knock_enemy_waypoint.position.x = enemy00.transform.translation.x - (self.lightsaber_full_length*0.88) 
+                # self.knock_enemy_waypoint.position.y = enemy00.transform.translation.y + 0.17
+                # self.knock_enemy_waypoint.position.z = 0.4 #-self.table_offset + height*2
+                # self.knock_enemy_waypoint.orientation.x = 1.8
+                # # self.knock_enemy_waypoint.orientation.y = 0.5
+                # self.knock_enemy_waypoint.orientation.z = -math.pi/16
 
 
                 #####################################
@@ -544,12 +571,9 @@ class MoveGroup(Node):
                 #self.moveit.check_planning_scene(self.goal_waypoint)
                 # if ___:
                 if self.is_waypoint:
-                    self.get_logger().info("CORRECT!")
                     self.moveit.plan_traj_to_pose(self.goal_waypoint)
                 else:
-                    self.get_logger().info("MF!")
                     self.moveit.joint_waypoints(self.waypoint_joints)
-                    self.is_waypoint = True
                 self.waypoints += 1
 
         elif self.state == State.WAYPOINTS_WAIT:
@@ -579,7 +603,13 @@ class MoveGroup(Node):
                 #     self.state = State.WAYPOINTS
                 # else:
                 #     self.state = State.IDLE
-                self.goal_waypoint = self.knock_enemy_waypoint
+                if self.is_waypoint:
+                    self.goal_waypoint = self.knock_enemy_waypoint
+                else:
+                    if self.waypoints == 1:
+                        self.waypoint_joints = self.waypoint_joints2
+                    else:
+                        self.waypoint_joints = self.waypoint_joints3
                 self.get_logger().info("next waypoint!")
                 self.state = State.WAYPOINTS
 
@@ -654,7 +684,7 @@ class MoveGroup(Node):
 
            # once we're not executing anymore, return to IDLE
             if not self.moveit.busy:
-                if self.waypoints == 1:
+                if self.waypoints < 3:
                     self.state = State.NEXT_WAYPOINT
                 else:
                     self.get_logger().info("done!")
