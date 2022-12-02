@@ -449,7 +449,7 @@ class MoveGroup(Node):
                 #goal waypoint
                 self.goal_waypoint = geometry_msgs.msg.Pose()
 
-                self.goal_waypoint.position.x = enemy00.transform.translation.x - (self.lightsaber_full_length*0.75)
+                self.goal_waypoint.position.x = enemy00.transform.translation.x + (self.lightsaber_full_length*0.25)
                 self.goal_waypoint.position.y = enemy00.transform.translation.y           #adding slight offset (slightly more than half the block width)
                 self.goal_waypoint.position.z = -self.table_offset + height + 0.18
 
@@ -627,7 +627,7 @@ class MoveGroup(Node):
         return response
 
     def look_for_enemy_callback(self, request, response):
-        if not self.obstacle_future:
+        if not self.obstacles_added:
             self.state = State.SETUP
         else:
             self.state = State.FIND_ALLIES
