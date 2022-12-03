@@ -246,7 +246,7 @@ class CameraProcessor(Node):
         self.declare_parameter("enable_enemy_sliders", False,
                                ParameterDescriptor(description="Enable Enemy HSV sliders"))
         self.enable_enemy_sliders = self.get_parameter("enable_enemy_sliders").get_parameter_value().bool_value
-        self.declare_parameter("enable_filtering_sliders", True,
+        self.declare_parameter("enable_filtering_sliders", False,
                                ParameterDescriptor(description="Enable filtering sliders"))
         self.enable_filtering_sliders = self.get_parameter("enable_filtering_sliders").get_parameter_value().bool_value
         self.declare_parameter("enable_work_area_sliders", False,
@@ -324,8 +324,9 @@ class CameraProcessor(Node):
         self.broadcaster = TransformBroadcaster(self)
         self.buffer = Buffer()
         self.listener = TransformListener(self.buffer, self)
-        self.tf_camera_to_workspace1 = None
-        self.tf_camera_to_workspace2 = None
+        self.tf_camera_to_robot_table_raw = None
+        self.tf_camera_to_workspace1_raw = None
+        self.tf_camera_to_workspace2_raw = None
         self.tf_workspace_min = None
         self.tf_workspace_max = None
         self.workspace_min_pixel = Pixel()
@@ -522,52 +523,89 @@ class CameraProcessor(Node):
         cv2.waitKey(1)
     
     def get_transforms(self):
+
+        time = self.get_clock().now().to_msg()
+
+        # Get panda table transformations if possible
+        try:
+            self.tf_camera_to_robot_table_raw = self.buffer.lookup_transform(
+                FRAMES().CAMERA_COLOR,
+                FRAMES().PANDA_TABLE_RAW,
+                rclpy.time.Time()
+            )
+        except Exception:
+            pass
+
+        # Broadcast last known transforms even if we lose AprilTags
+        if self.tf_camera_to_robot_table_raw is not None:
+            transform = copy.deepcopy(self.tf_camera_to_robot_table_raw)
+            transform.child_frame_id = FRAMES().PANDA_TABLE
+            transform.header.stamp = time
+
+            self.broadcaster.sendTransform(transform)
+
         # Get workspace transformations if possible
         if self.enable_work_area_apriltags:
             try:
-                self.tf_camera_to_workspace1 = self.buffer.lookup_transform(
+                self.tf_camera_to_workspace1_raw = self.buffer.lookup_transform(
                     FRAMES().CAMERA_COLOR,
-                    FRAMES().WORK_TABLE1,
+                    FRAMES().WORK_TABLE1_RAW,
                     rclpy.time.Time()
                 )
             except Exception:
                 pass
 
             try:
-                self.tf_camera_to_workspace2 = self.buffer.lookup_transform(
+                self.tf_camera_to_workspace2_raw = self.buffer.lookup_transform(
                     FRAMES().CAMERA_COLOR,
-                    FRAMES().WORK_TABLE2,
+                    FRAMES().WORK_TABLE2_RAW,
                     rclpy.time.Time()
                 )
             except Exception:
                 pass
 
         self.work_area_apriltags_detected = (
-            (self.tf_camera_to_workspace1 is not None) 
-            and (self.tf_camera_to_workspace2 is not None)
+            (self.tf_camera_to_workspace1_raw is not None) 
+            and (self.tf_camera_to_workspace2_raw is not None)
         )
 
-        # Determine bounds from work area AprilTags
+        # Broadcast last known transforms even if we lose AprilTags
+        if self.tf_camera_to_workspace1_raw is not None:
+            transform = copy.deepcopy(self.tf_camera_to_workspace1_raw)
+            transform.child_frame_id = FRAMES().WORK_TABLE1
+            transform.header.stamp = time
+
+            self.broadcaster.sendTransform(transform)
+
+        if self.tf_camera_to_workspace2_raw is not None:
+            transform = copy.deepcopy(self.tf_camera_to_workspace2_raw)
+            transform.child_frame_id = FRAMES().WORK_TABLE2
+            transform.header.stamp = time
+
+            self.broadcaster.sendTransform(transform)
+
+        
         if self.work_area_apriltags_detected:
+            # Determine bounds from work area AprilTags
             self.work_area_limits_y.lower = min(
-                self.tf_camera_to_workspace1.transform.translation.y,
-                self.tf_camera_to_workspace2.transform.translation.y
+                self.tf_camera_to_workspace1_raw.transform.translation.y,
+                self.tf_camera_to_workspace2_raw.transform.translation.y
             ) - self.work_area_tag_size / 2.
             self.work_area_limits_y.upper = max(
-                self.tf_camera_to_workspace1.transform.translation.y,
-                self.tf_camera_to_workspace2.transform.translation.y
+                self.tf_camera_to_workspace1_raw.transform.translation.y,
+                self.tf_camera_to_workspace2_raw.transform.translation.y
             ) + self.work_area_tag_size / 2.
             self.work_area_limits_z.lower = min(
-                self.tf_camera_to_workspace1.transform.translation.z,
-                self.tf_camera_to_workspace2.transform.translation.z
+                self.tf_camera_to_workspace1_raw.transform.translation.z,
+                self.tf_camera_to_workspace2_raw.transform.translation.z
             ) - self.work_area_tag_size / 2.
             self.work_area_limits_z.upper = max(
-                self.tf_camera_to_workspace1.transform.translation.z,
-                self.tf_camera_to_workspace2.transform.translation.z
+                self.tf_camera_to_workspace1_raw.transform.translation.z,
+                self.tf_camera_to_workspace2_raw.transform.translation.z
             ) + self.work_area_tag_size / 2.
             table_depth = min(
-                self.tf_camera_to_workspace1.transform.translation.x,
-                self.tf_camera_to_workspace2.transform.translation.x
+                self.tf_camera_to_workspace1_raw.transform.translation.x,
+                self.tf_camera_to_workspace2_raw.transform.translation.x
             )
             # Inverted minus sign and min/max due to direction of camera frame x axis
             self.work_area_limits_x.lower = table_depth - self.depth_filter_max
