@@ -512,6 +512,25 @@ class MoveGroup(Node):
         # repeat with right attack, moving to stab motion if invalid
         # repeat with stab motion, change to no attack possible if invalid
 
+        # Ideas for looping through multiple obstacles: 
+        #   1. add a state to go to after each execution is done to check if enemies are 
+        #       left and incremeant to the next one?
+        #   2. look for enemies in a function called in the timer after an initial 'start' 
+        #       serivce is called
+
+
+        # elif self.state == State.LEFT_ATTACK:
+        #     if_ally_danger = self.check_ally_danger_fall(self.detected_enemies[i], 0)
+        #     if if_ally_danger:
+        #         self.state = State.RIGHT_ATTACK
+        #     else:
+        #         # essentially what's in the look for enemy state
+        #         if ik compute or plan returns not success:
+        #             self.state = State.RIGHT_ATTACK
+        #         else:
+        #             self.state = State.DYNAMIC_MOTION
+        
+
         elif self.state == State.STAB_MOTION:
             self.is_stab_motion = True
             joint_waypoints = []
@@ -726,6 +745,7 @@ class MoveGroup(Node):
                     if all_transforms_found:
                         self.enemies_after = len(self.detected_enemies)
                         self.state = State.MOVE_TO_HOME_START
+                        # TODO: change - self.enemies_before is currently hard coded to 0 in the init
                         self.dead_enemy_count+= self.enemies_before - self.enemies_after
 
 
@@ -1672,15 +1692,15 @@ class MoveGroup(Node):
             enemy_to_ally = self.tf_buffer.lookup_transform(ally.obj.name, enemy_obj.obj.name, rclpy.time.Time())
             dist_y = enemy_to_ally.transform.translation.y
             dist_x = enemy_to_ally.transform.translation.x
-            if swing_style == 1:
+            if swing_style == 0:
                 # swinging so the brick falls to the left from desk view
                 if ((dist_y+0.5*self.block_width) < self.block_height) and ((dist_x+0.5*self.block_width) < self.block_width):
                     return False
-            if swing_style == 2:
+            if swing_style == 1:
                 # swinging so the brick falls to the right
                 if ((dist_y+0.5*self.block_width) < -self.block_height) and ((dist_x+0.5*self.block_width) < -self.block_width):
                     return False
-            if swing_style == 3:
+            if swing_style == 2:
                 # swinging so the brick falls straight backwards
                 if ((dist_x+0.5*self.block_width) < self.block_height) and ((dist_y+0.5*self.block_width) < self.block_width):
                     return False
