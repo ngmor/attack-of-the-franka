@@ -36,6 +36,7 @@ from tf2_ros import TransformException
 from attack_of_the_franka.common import FRAMES, angle_axis_to_quaternion, ObjectType
 from rcl_interfaces.msg import ParameterDescriptor
 from attack_of_the_franka_interfaces.msg import Detections, DetectedObject
+from std_msgs.msg import Int16
 
 
 class State(Enum):
@@ -57,7 +58,8 @@ class State(Enum):
     SETUP = auto(),
     FIND_ALLIES = auto(),
     DYNAMIC_MOTION = auto(),
-    STAB_MOTION = auto()
+    STAB_MOTION = auto(),
+    ENEMIES_KILLED_COUNT = auto()
 
 class DetectedObjectData():
 
@@ -247,6 +249,7 @@ class MoveGroup(Node):
         self.goal_waypoint = geometry_msgs.msg.Pose()
         self.plan = None
 
+        # self.state = State.IDLE
         self.state = State.IDLE
 
         self.get_logger().info("moveit_interface_tester node started")
@@ -290,6 +293,12 @@ class MoveGroup(Node):
         self.block_height = 0.1
         self.block_width = 0.05
         self.block_length = 0.03
+        self.sign = 1
+        self.dead_count_pub = self.create_publisher(Int16, 'enemy_dead_count', 10)
+        self.enemy_cnt = 0
+
+        self.num_waypoints_completed = 0
+
 
     def obstacle_info(self):
         """
@@ -321,6 +330,34 @@ class MoveGroup(Node):
         if self.pickup_action_client.server_is_ready():
             self.pickup_action_client.send_goal_async(grip_msg)
 
+    def find_allies(self):
+        all_transforms_found = self.update_detected_objects(ObjectType.ALLY)
+        obstacle_list = []
+        if all_transforms_found:
+            # if ally00_here: # and table_here:
+            for i in range(len(all_transforms_found)):
+                obstacle = moveit_msgs.msg.CollisionObject()
+                obstacle.id = all_transforms_found[i].obj               #EDIT: ally name
+
+                shape = shape_msgs.msg.SolidPrimitive()
+                shape.type = 1  # Box
+                length = 0.078
+                width = 0.105
+                height = 0.2286                                         #EDIT: ally00.transform.translation.z - table.transform.translation.z
+                shape.dimensions = [length, width, height]
+                obstacle.primitives = [shape]
+
+                pose = geometry_msgs.msg.Pose()
+                pose.position.x = all_transforms_found[i].transform.translation.x
+                pose.position.y = all_transforms_found[i].transform.translation.y
+                pose.position.z = -0.091 + (height/2)                   #EDIT: table.transform.translation.z + (height/2)
+                obstacle.primitive_poses = [pose]
+
+                obstacle.header.frame_id = self.moveit.config.base_frame_id
+                obstacle_list.append(obstacle)
+
+            self.moveit.update_obstacles(obstacle_list, delete=False)
+
     def timer_callback(self):
         """
         Check states and call the specific plan or execute from MoveIt API accordingly.
@@ -336,33 +373,7 @@ class MoveGroup(Node):
         # call MoveIt handler
         self.moveit.handle()
 
-        try:
-            ally00 = self.tf_buffer.lookup_transform(FRAMES.PANDA_BASE, FRAMES.ALLY + '00', rclpy.time.Time())
-            obstacle = moveit_msgs.msg.CollisionObject()
-            obstacle.id = FRAMES.ALLY + '00'
-
-            shape = shape_msgs.msg.SolidPrimitive()
-            shape.type = 1  # Box
-            length = 0.078
-            width = 0.105
-            height = 0.2286
-            shape.dimensions = [length, width, height]
-            obstacle.primitives = [shape]
-
-            pose = geometry_msgs.msg.Pose()
-            pose.position.x = ally00.transform.translation.x
-            pose.position.y = ally00.transform.translation.y
-            pose.position.z = -self.table_offset + (height/2) #table.transform.translation.z 0.115
-            obstacle.primitive_poses = [pose]
-
-            obstacle.header.frame_id = self.moveit.config.base_frame_id
-
-
-            self.moveit.update_obstacles([obstacle], delete=False)
-        except TransformException:
-            pass
-
-
+        self.find_allies()
 
         # State machine
         if self.state == State.MOVE_TO_HOME_START:
@@ -391,6 +402,7 @@ class MoveGroup(Node):
                 return
 
             if table1_here and table2_here:
+                self.table1_x = table1.transform.translation.x
                 self.table_len_x = table2.transform.translation.x - table1.transform.translation.x + 0.1
                 self.table_len_y = abs(table1.transform.translation.y) + abs(table2.transform.translation.y) + 0.06
                 self.table_center_x = ((abs(table1.transform.translation.x - table2.transform.translation.x))/2) + table1.transform.translation.x
@@ -399,154 +411,84 @@ class MoveGroup(Node):
                 self.add_walls()
                 self.add_lightsaber()
                 self.obstacles_added = 1
-                self.state = State.FIND_ALLIES
-
-        elif self.state == State.FIND_ALLIES:
-            try:
-                ally00 = self.tf_buffer.lookup_transform(FRAMES.PANDA_BASE, FRAMES.ALLY + '00', rclpy.time.Time())
-                ally00_here = True
-            except TransformException:
-                ally00_here = False
-                return
-            try:
-                table = self.tf_buffer.lookup_transform(FRAMES.PANDA_BASE, FRAMES.WORK_TABLE1, rclpy.time.Time())
-                table_here = True
-            except TransformException:
-                table_here = False
-                return
-
-            # if ally00_here: # and table_here:
-            self.get_logger().info('AHHHHHHHH')
-            obstacle = moveit_msgs.msg.CollisionObject()
-            obstacle.id = FRAMES.ALLY + '00'
-
-            shape = shape_msgs.msg.SolidPrimitive()
-            shape.type = 1  # Box
-            length = 0.078
-            width = 0.105
-            height = 0.2286 #-(table.transform.translation.z - ally00.transform.translation.z)
-            shape.dimensions = [length, width, height]
-            obstacle.primitives = [shape]
-
-            pose = geometry_msgs.msg.Pose()
-            pose.position.x = ally00.transform.translation.x
-            pose.position.y = ally00.transform.translation.y
-            pose.position.z = -0.091 + (height/2) #table.transform.translation.z 0.115
-            obstacle.primitive_poses = [pose]
-
-            obstacle.header.frame_id = self.moveit.config.base_frame_id
+                self.state = State.LOOK_FOR_ENEMY
 
 
-            self.moveit.update_obstacles([obstacle], delete=False)
+        # elif self.state == State.FIND_ALLIES:
+        #     all_transforms_found = self.update_detected_objects(ObjectType.ALLY)
 
-            self.state = State.LOOK_FOR_ENEMY
+        #     # if ally00_here: # and table_here:
+        #     self.get_logger().info('AHHHHHHHH')
+        #     obstacle = moveit_msgs.msg.CollisionObject()
+        #     obstacle.id = FRAMES.ALLY + '00'
+
+        #     shape = shape_msgs.msg.SolidPrimitive()
+        #     shape.type = 1  # Box
+        #     length = 0.078
+        #     width = 0.105
+        #     height = 0.2286 #-(table.transform.translation.z - ally00.transform.translation.z)
+        #     shape.dimensions = [length, width, height]
+        #     obstacle.primitives = [shape]
+
+        #     pose = geometry_msgs.msg.Pose()
+        #     pose.position.x = ally00.transform.translation.x
+        #     pose.position.y = ally00.transform.translation.y
+        #     pose.position.z = -0.091 + (height/2) #table.transform.translation.z 0.115
+        #     obstacle.primitive_poses = [pose]
+
+        #     obstacle.header.frame_id = self.moveit.config.base_frame_id
+
+
+        #     self.moveit.update_obstacles([obstacle], delete=False)
+
+        #     self.state = State.LOOK_FOR_ENEMY
 
 
         elif self.state == State.LOOK_FOR_ENEMY:
             self.waypoints = 0
-            if self.moveit._state == self.moveit._state.IDLE:
-                try:
-                    ally00 = self.tf_buffer.lookup_transform(FRAMES.PANDA_BASE, FRAMES.ALLY + '00', rclpy.time.Time())
-                except TransformException:
-                    return
-                try:
-                    table = self.tf_buffer.lookup_transform(FRAMES.PANDA_BASE, FRAMES.WORK_TABLE1, rclpy.time.Time())
-                except TransformException:
-                    return
-                try:
-                    self.enemy00 = self.tf_buffer.lookup_transform(FRAMES.PANDA_BASE, FRAMES.ENEMY + '00', rclpy.time.Time())
-                    self.rotate = math.atan2(self.enemy00.transform.translation.y, self.enemy00.transform.translation.x)
+            all_transforms_found = self.update_detected_objects(ObjectType.ENEMY)
+            self.x_disp = []
+            self.rotate = []
+            self.waypoint_movements = []
+            self.goal_waypoint = geometry_msgs.msg.Pose()
+            if not self.moveit.busy:
+                if all_transforms_found:
+                    self.enemies_after = len(self.detected_enemies)
+                    for i in range(len(all_transforms_found)):
+                        self.x_disp[i] = all_transforms_found[i].transform.translation.x - self.table1_x.transform.translation.x + 0.1     #add buffer offset
+                        self.rotate[i] = math.atan2(all_transforms_found[i].transform.translation.y, all_transforms_found[i].transform.translation.x)
+
+                        x_pos = all_transforms_found[i].transform.translation.x
+                        y_pos = all_transforms_found[i].transform.translation.y
+                        height = all_transforms_found[i].transform.translation.z - self.table1_x.transform.translation.z
+
+                        self.goal_waypoint.position.x = x_pos - (self.lightsaber_full_length*0.75)
+                        self.goal_waypoint.position.y = y_pos + self.sign*0.16            #adding slight offset (slightly more than half the block width)
+                        self.goal_waypoint.position.z = -self.table_offset + height + 0.18
+
+                        self.goal_waypoint.orientation.x = math.pi
+                        self.goal_waypoint.orientation.z = -math.pi/16
+
+                        self.knock_enemy_waypoint = geometry_msgs.msg.Pose()
+                        self.knock_enemy_waypoint.position.x = x_pos - (self.lightsaber_full_length*0.75)
+                        self.knock_enemy_waypoint.position.y = y_pos + self.sign*0.0725            #adding slight offset (slightly more than half the block width)
+                        self.knock_enemy_waypoint.position.z = -self.table_offset + height + 0.18
+                        self.knock_enemy_waypoint.orientation.x = math.pi
+                        self.knock_enemy_waypoint.orientation.z = -math.pi/16
+
+                        self.waypoint_movements.append([self.goal_waypoint, self.knock_enemy_waypoint])
+
+
                     self.state = State.DYNAMIC_MOTION
-                except TransformException:
-                    return
-
-                try:
-                    table1 = self.tf_buffer.lookup_transform(FRAMES.PANDA_BASE, FRAMES.WORK_TABLE1, rclpy.time.Time())
-                except TransformException:
-                    return
-                try:
-                    table2 = self.tf_buffer.lookup_transform(FRAMES.PANDA_BASE, FRAMES.WORK_TABLE2, rclpy.time.Time())
-                except TransformException:
-                    return
-
-                self.table_len_x = table2.transform.translation.x - table1.transform.translation.x + 0.1
-                self.table_len_y = abs(table1.transform.translation.y) + abs(table2.transform.translation.y) + 0.06
-                self.table_center_x = ((abs(table1.transform.translation.x - table2.transform.translation.x))/2) + table1.transform.translation.x
-                self.table_center_y = (table1.transform.translation.y + table2.transform.translation.y)/2
-
-                obstacle = moveit_msgs.msg.CollisionObject()
-                obstacle.id = FRAMES.ALLY + '00'
-
-                shape = shape_msgs.msg.SolidPrimitive()
-                shape.type = 1  # Box
-                length = 0.078
-                width = 0.105
-                height = 0.2286
-                shape.dimensions = [length, width, height]
-                obstacle.primitives = [shape]
-
-                pose = geometry_msgs.msg.Pose()
-                pose.position.x = ally00.transform.translation.x
-                pose.position.y = ally00.transform.translation.y
-                pose.position.z = -self.table_offset + (height/2) #table.transform.translation.z 0.115
-                obstacle.primitive_poses = [pose]
-
-                obstacle.header.frame_id = self.moveit.config.base_frame_id
-                self.x_dist = self.enemy00.transform.translation.x - table1.transform.translation.x + 0.1     #add buffer offset
-
-                self.moveit.update_obstacles([obstacle], delete=False)
-
 
         elif self.state == State.DYNAMIC_MOTION:
-            self.num_movements = 2
             if self.moveit.planning:
                 self.state = State.WAYPOINTS_WAIT
             else:
-                self.get_logger().info('AHHHHHHHH')
-                #####################################
-                # Come in from right
-                #####################################
-                #goal waypoint
-                self.goal_waypoint = geometry_msgs.msg.Pose()
-
-                # self.goal_waypoint.position.x = self.enemy00.transform.translation.x - (self.lightsaber_full_length*0.75)
-                # self.goal_waypoint.position.y = self.enemy00.transform.translation.y + 0.16            #adding slight offset (slightly more than half the block width)
-                # self.goal_waypoint.position.z = -self.table_offset + height + 0.18
-
-                # orientation = angle_axis_to_quaternion(math.pi, [1,0,0])
-                # self.goal_waypoint.orientation.x = math.pi
-                # self.goal_waypoint.orientation.z = -math.pi/16
-
-                #bad example
-                self.goal_waypoint.position.x = self.enemy00.transform.translation.x - (self.lightsaber_full_length*0.75)
-                self.goal_waypoint.position.y = self.enemy00.transform.translation.y + 0.16            #adding slight offset (slightly more than half the block width)
-                self.goal_waypoint.position.z = -self.table_offset + height - 0.18
-
-                orientation = angle_axis_to_quaternion(math.pi, [1,0,0])
-                self.goal_waypoint.orientation.x = math.pi
-                self.goal_waypoint.orientation.z = -math.pi/2
-
-
-                self.knock_enemy_waypoint = geometry_msgs.msg.Pose()
-                self.knock_enemy_waypoint.position.x = self.enemy00.transform.translation.x - (self.lightsaber_full_length*0.75)
-                self.knock_enemy_waypoint.position.y = self.enemy00.transform.translation.y + 0.0725            #adding slight offset (slightly more than half the block width)
-                self.knock_enemy_waypoint.position.z = -self.table_offset + height + 0.18
-                self.knock_enemy_waypoint.orientation.x = math.pi
-                self.knock_enemy_waypoint.orientation.z = -math.pi/16
-
-                waypoint_movements = [self.goal_waypoint, self.knock_enemy_waypoint]
-
-                self.moveit.plan_traj_to_pose(waypoint_movements[self.num_moves_completed])
+                self.moveit.plan_traj_to_pose(self.waypoint_movements[self.num_waypoints_completed][self.num_moves_completed])
                 self.num_moves_completed += 1
-                self.get_logger().info(f'AHHHHHHHH {self.num_moves_completed}')
-
-                # self.moveit.plan_traj_to_pose(waypoint_movements[self.num_moves_completed])
-                # if self.moveit.get_last_error() == MoveItApiErrors.NO_ERROR:
-                #     self.num_moves_completed += 1
-                # else:
-                #     self.dynamic_move = False
-                #     self.state = State.STAB_MOTION
-        
+                if self.num_moves_completed%2 == 0:
+                    self.num_waypoints_completed += 1
         ############
         # PROPOSED FLOW TO DECIDE ATTACK STYLE
         ############
@@ -558,10 +500,10 @@ class MoveGroup(Node):
         # else switch to execution state
         # repeat with right attack, moving to stab motion if invalid
         # repeat with stab motion, change to no attack possible if invalid
-
+        
         elif self.state == State.STAB_MOTION:
-            self.num_movements = 4
             self.is_stab_motion = True
+            joint_waypoints = []
             if self.moveit.planning:
                 self.state = State.WAYPOINTS_WAIT
             else:
@@ -570,63 +512,68 @@ class MoveGroup(Node):
                 #####################################
                 #goal waypoint
                 self.is_waypoint = False
-                self.waypoint_joints1 = [self.rotate,        #ONLY CHANGE THIS ONE(rotate panda_joint1)
-                                        -0.7853981633974483,    # panda_joint2
-                                        0.0,                    # panda_joint3
-                                        -2.356194490192345,     # panda_joint4
-                                        0.0,                    # panda_joint5
-                                        (math.pi*5)/6,     # panda_joint6
-                                        0.7853981633974483,     # panda_joint7
-                                                                # TODO - This might open the gripper when we try to move home
-                                                                # CAREFUL!
-                                        0.0,                  # 0.035, 0.0 panda_finger_joint1
-                                        0.0   
-                                        ]
+                for i in range(len(self.x_disp)):
+                    self.waypoint_joints1 = [self.rotate[i],        #ONLY CHANGE THIS ONE(rotate panda_joint1)
+                                            -0.7853981633974483,    # panda_joint2
+                                            0.0,                    # panda_joint3
+                                            -2.356194490192345,     # panda_joint4
+                                            0.0,                    # panda_joint5
+                                            (math.pi*5)/6,     # panda_joint6
+                                            0.7853981633974483,     # panda_joint7
+                                                                    # TODO - This might open the gripper when we try to move home
+                                                                    # CAREFUL!
+                                            0.0,                  # 0.035, 0.0 panda_finger_joint1
+                                            0.0   
+                                            ]
 
-                self.waypoint_joints2 = [self.rotate,        #ONLY CHANGE THIS ONE(rotate panda_joint1)
-                                        math.radians(-50),    # panda_joint2
-                                        math.radians(-1),                    # panda_joint3
-                                        math.radians(-165),     # panda_joint4
-                                        math.radians(0),                    # panda_joint5
-                                        math.radians(108),     # panda_joint6
-                                        math.radians(45),     # panda_joint7
-                                                                # TODO - This might open the gripper when we try to move home
-                                                                # CAREFUL!
-                                        0.0,                  # 0.035, 0.0 panda_finger_joint1
-                                        0.0   
-                                        ]
+                    self.waypoint_joints2 = [self.rotate[i],        #ONLY CHANGE THIS ONE(rotate panda_joint1)
+                                            math.radians(-50),    # panda_joint2
+                                            math.radians(-1),                    # panda_joint3
+                                            math.radians(-165),     # panda_joint4
+                                            math.radians(0),                    # panda_joint5
+                                            math.radians(108),     # panda_joint6
+                                            math.radians(45),     # panda_joint7
+                                                                    # TODO - This might open the gripper when we try to move home
+                                                                    # CAREFUL!
+                                            0.0,                  # 0.035, 0.0 panda_finger_joint1
+                                            0.0   
+                                            ]
 
 
-                self.waypoint_joints3 = [self.rotate,        #ONLY CHANGE THIS ONE(rotate panda_joint1)
-                                        math.radians(-50 + ((100/0.4826)*self.x_dist)),    # panda_joint2     0.4826 meters is width of block table and 107 deg is the total degrees this joint changes to reach end of table
-                                        math.radians(-1),                    # panda_joint3
-                                        math.radians(-165 + ((100/0.4826)*self.x_dist)),     # panda_joint4
-                                        math.radians(0),       # panda_joint5
-                                        math.radians(108 - ((8/0.4826)*self.x_dist)),     # panda_joint6
-                                        math.radians(45),     # panda_joint7
-                                                                # TODO - This might open the gripper when we try to move home
-                                                                # CAREFUL!
-                                        0.0,                  # 0.035, 0.0 panda_finger_joint1
-                                        0.0   
-                                        ]
-                
-                self.waypoint_joints4 = [self.rotate,        #ONLY CHANGE THIS ONE(rotate panda_joint1)
-                                        math.radians(-50),    # panda_joint2
-                                        math.radians(-1),                    # panda_joint3
-                                        math.radians(-165),     # panda_joint4
-                                        math.radians(0),                    # panda_joint5
-                                        math.radians(108),     # panda_joint6
-                                        math.radians(45),     # panda_joint7
-                                                                # TODO - This might open the gripper when we try to move home
-                                                                # CAREFUL!
-                                        0.0,                  # 0.035, 0.0 panda_finger_joint1
-                                        0.0   
-                                        ]
+                    self.waypoint_joints3 = [self.rotate[i],        #ONLY CHANGE THIS ONE(rotate panda_joint1)
+                                            math.radians(-50 + ((100/0.4826)*self.x_disp[i])),    # panda_joint2     0.4826 meters is width of block table and 107 deg is the total degrees this joint changes to reach end of table
+                                            math.radians(-1),                    # panda_joint3
+                                            math.radians(-165 + ((100/0.4826)*self.x_disp[i])),     # panda_joint4
+                                            math.radians(0),       # panda_joint5
+                                            math.radians(108 - ((8/0.4826)*self.x_disp[i])),     # panda_joint6
+                                            math.radians(45),     # panda_joint7
+                                                                    # TODO - This might open the gripper when we try to move home
+                                                                    # CAREFUL!
+                                            0.0,                  # 0.035, 0.0 panda_finger_joint1
+                                            0.0   
+                                            ]
 
-                joint_movements = [self.waypoint_joints1, self.waypoint_joints2, self.waypoint_joints3, self.waypoint_joints4]
+                    self.waypoint_joints4 = [self.rotate[i],        #ONLY CHANGE THIS ONE(rotate panda_joint1)
+                                            math.radians(-50),    # panda_joint2
+                                            math.radians(-1),                    # panda_joint3
+                                            math.radians(-165),     # panda_joint4
+                                            math.radians(0),                    # panda_joint5
+                                            math.radians(108),     # panda_joint6
+                                            math.radians(45),     # panda_joint7
+                                                                    # TODO - This might open the gripper when we try to move home
+                                                                    # CAREFUL!
+                                            0.0,                  # 0.035, 0.0 panda_finger_joint1
+                                            0.0   
+                                            ]
 
-                self.moveit.joint_waypoints(joint_movements[self.num_moves_completed])
+                    joint_movements = [self.waypoint_joints1, self.waypoint_joints2, self.waypoint_joints3, self.waypoint_joints4]
+                    self.num_movements = len(joint_movements)
+                    joint_waypoints.append(joint_movements)
+
+                self.moveit.joint_waypoints(joint_waypoints[self.num_waypoints_completed][self.num_moves_completed])
                 self.num_moves_completed += 1
+                if self.num_moves_completed%4 == 0:
+                    self.num_waypoints_completed += 1
 
         elif self.state == State.WAYPOINTS:
             if self.moveit.planning:
@@ -655,8 +602,12 @@ class MoveGroup(Node):
                 if self.moveit.get_last_error() == MoveItApiErrors.NO_ERROR:
                     self.state = State.EXECUTE_START
                     self.get_logger().info("start execute!")
+                elif self.sign == 1:
+                    self.sign = -1
+                    self.state = State.DYNAMIC_MOTION
                 elif not self.is_stab_motion:
                     self.num_moves_completed = 0
+                    self.num_waypoints_completed = 0
                     self.state = State.STAB_MOTION
                 else:
                     self.state = State.IDLE
@@ -760,7 +711,17 @@ class MoveGroup(Node):
                         self.state = State.STAB_MOTION
                 else:
                     self.get_logger().info("done!")
-                    self.state = State.MOVE_TO_HOME_START
+                    all_transforms_found = self.update_detected_objects(ObjectType.ENEMY)
+                    if all_transforms_found:
+                        self.enemies_after = len(self.detected_enemies)
+                        self.state = State.MOVE_TO_HOME_START
+                        self.dead_enemy_count+= self.enemies_before - self.enemies_after
+
+
+
+        self.dead_count_pub.publish(self.dead_enemy_count)
+
+
 
     def move_to_home_callback(self, request, response):
         """

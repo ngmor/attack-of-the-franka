@@ -231,6 +231,7 @@ class CameraProcessor(Node):
         self.sub_color_image = self.create_subscription(sensor_msgs.msg.Image,'/camera/color/image_raw',self.color_image_callback,10)
         self.sub_color_camera_info = self.create_subscription(sensor_msgs.msg.CameraInfo,'/camera/color/camera_info',self.color_info_callback,10)
         self.sub_aligned_depth_image = self.create_subscription(sensor_msgs.msg.Image,'/camera/aligned_depth_to_color/image_raw',self.aligned_depth_image_callback,10)
+        self.sub_enemy_dead_count = self.create_subscription(sensor_msgs.msg.Int16,'enemy_dead_count',self.enemy_deadcount_callback,10)
 
         self.declare_parameter("enable_ally_sliders", False,
                                ParameterDescriptor(description="Enable Ally HSV sliders"))
@@ -491,6 +492,7 @@ class CameraProcessor(Node):
 
         color_image_with_tracking = cv2.putText(color_image_with_tracking, f'Allies: {len(self.contours_filtered_ally)}',(50,50),cv2.FONT_HERSHEY_DUPLEX,1,(255,0,0))
         color_image_with_tracking = cv2.putText(color_image_with_tracking, f'Enemies: {len(self.contours_filtered_enemy)}',(50,100),cv2.FONT_HERSHEY_DUPLEX,1,(0,0,255))
+        color_image_with_tracking = cv2.putText(color_image_with_tracking, f'Enemies Vanquished!: {len(self.dead_enemies_count)}',(50,150),cv2.FONT_HERSHEY_DUPLEX,1,(128,0,0))
 
         cv2.imshow(self.color_window_name, color_image_with_tracking)
         cv2.waitKey(1)
@@ -584,6 +586,8 @@ class CameraProcessor(Node):
         except CvBridgeError as e:
             print(e)
             return
+    def enemy_deadcount_callback(self, msg):
+        self.dead_enemies_count = msg
 
 
 def entry(args=None):
