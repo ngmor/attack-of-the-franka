@@ -489,15 +489,16 @@ class MoveGroup(Node):
             if self.moveit.planning:
                 self.state = State.WAYPOINTS_WAIT
             else:
-                self.get_logger().info(f'waypoint array: {self.waypoint_movements}')
+                # self.get_logger().info(f'waypoint array: {self.waypoint_movements}')
                 if self.waypoint_movements:
                     try:
-                        self.get_logger().info(f'at index num_waypoints, num_moves: {self.num_waypoints_completed}, {self.num_moves_completed}')
+                        # self.get_logger().info(f'at index num_waypoints, num_moves: {self.num_waypoints_completed}, {self.num_moves_completed}')
                         self.moveit.plan_traj_to_pose(self.waypoint_movements[self.num_waypoints_completed][self.num_moves_completed])
                         self.num_moves_completed += 1
                         if self.num_moves_completed%2 == 0:
                             self.num_waypoints_completed += 1
                     except:
+                        self.state = State.IDLE
                         pass
         ############
         # PROPOSED FLOW TO DECIDE ATTACK STYLE
