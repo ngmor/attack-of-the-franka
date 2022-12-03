@@ -36,6 +36,7 @@ from tf2_ros import TransformException
 from attack_of_the_franka.common import FRAMES, angle_axis_to_quaternion, ObjectType
 from rcl_interfaces.msg import ParameterDescriptor
 from attack_of_the_franka_interfaces.msg import Detections, DetectedObject
+from std_msgs.msg import Int16
 
 
 class State(Enum):
@@ -57,13 +58,8 @@ class State(Enum):
     SETUP = auto(),
     FIND_ALLIES = auto(),
     DYNAMIC_MOTION = auto(),
-    STAB_MOTION = auto()
-
-# class MotionDecision():
-    # bool DynamicMotionRight(),
-    # bool StabMotion(),
-    #     self.sign = 1
-
+    STAB_MOTION = auto(),
+    ENEMIES_KILLED_COUNT = auto()
 
 class DetectedObjectData():
 
@@ -253,6 +249,7 @@ class MoveGroup(Node):
         self.goal_waypoint = geometry_msgs.msg.Pose()
         self.plan = None
 
+        # self.state = State.IDLE
         self.state = State.IDLE
 
         self.get_logger().info("moveit_interface_tester node started")
@@ -294,6 +291,9 @@ class MoveGroup(Node):
         self.is_stab_motion = False
 
         self.sign = 1
+        self.dead_count_pub = self.create_publisher(Int16, 'enemy_dead_count', 10)
+        self.enemy_cnt = 0
+
 
 
     def obstacle_info(self):
@@ -406,6 +406,7 @@ class MoveGroup(Node):
                 self.obstacles_added = 1
                 self.state = State.FIND_ALLIES
 
+
         elif self.state == State.FIND_ALLIES:
             try:
                 ally00 = self.tf_buffer.lookup_transform(FRAMES.PANDA_BASE, FRAMES.ALLY + '00', rclpy.time.Time())
@@ -449,7 +450,12 @@ class MoveGroup(Node):
 
         elif self.state == State.LOOK_FOR_ENEMY:
             self.waypoints = 0
+            all_transforms_found = self.update_detected_objects(ObjectType.ENEMY)
+
             if not self.moveit.busy:
+                if all_transforms_found:
+                    self.enemies_after = len(self.detected_enemies)
+                #TODO cleanup looking for transforms
                 try:
                     ally00 = self.tf_buffer.lookup_transform(FRAMES.PANDA_BASE, FRAMES.ALLY + '00', rclpy.time.Time())
                 except TransformException:
@@ -756,7 +762,17 @@ class MoveGroup(Node):
                         self.state = State.STAB_MOTION
                 else:
                     self.get_logger().info("done!")
-                    self.state = State.MOVE_TO_HOME_START
+                    all_transforms_found = self.update_detected_objects(ObjectType.ENEMY)
+                    if all_transforms_found:
+                        self.enemies_after = len(self.detected_enemies)
+                        self.state = State.MOVE_TO_HOME_START
+                        self.dead_enemy_count+= self.enemies_before - self.enemies_after
+
+
+
+        self.dead_count_pub.publish(self.dead_enemy_count)
+
+
 
     def move_to_home_callback(self, request, response):
         """
