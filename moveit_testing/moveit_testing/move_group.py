@@ -295,6 +295,7 @@ class MoveGroup(Node):
         self.block_length = 0.03
         self.sign = 1
         self.dead_count_pub = self.create_publisher(Int16, 'enemy_dead_count', 10)
+        self.dead_enemy_count = None
         self.enemy_cnt = 0
 
         self.num_waypoints_completed = 0
@@ -335,9 +336,9 @@ class MoveGroup(Node):
         obstacle_list = []
         if all_transforms_found:
             # if ally00_here: # and table_here:
-            for i in range(len(all_transforms_found)):
+            for i in range(len(self.detected_allies)):
                 obstacle = moveit_msgs.msg.CollisionObject()
-                obstacle.id = all_transforms_found[i].obj               #EDIT: ally name
+                obstacle.id = self.detected_allies[i].obj.name               #EDIT: ally name
 
                 shape = shape_msgs.msg.SolidPrimitive()
                 shape.type = 1  # Box
@@ -348,8 +349,8 @@ class MoveGroup(Node):
                 obstacle.primitives = [shape]
 
                 pose = geometry_msgs.msg.Pose()
-                pose.position.x = all_transforms_found[i].transform.translation.x
-                pose.position.y = all_transforms_found[i].transform.translation.y
+                pose.position.x = self.detected_allies[i].tf.transform.translation.x
+                pose.position.y = self.detected_allies[i].tf.transform.translation.y
                 pose.position.z = -0.091 + (height/2)                   #EDIT: table.transform.translation.z + (height/2)
                 obstacle.primitive_poses = [pose]
 
@@ -454,13 +455,15 @@ class MoveGroup(Node):
             if not self.moveit.busy:
                 if all_transforms_found:
                     self.enemies_after = len(self.detected_enemies)
-                    for i in range(len(all_transforms_found)):
-                        self.x_disp[i] = all_transforms_found[i].transform.translation.x - self.table1_x.transform.translation.x + 0.1     #add buffer offset
-                        self.rotate[i] = math.atan2(all_transforms_found[i].transform.translation.y, all_transforms_found[i].transform.translation.x)
+                    # self.get_logger().info(f'length: {len(self.detected_enemies)}')
+                    for i in range(len(self.detected_enemies)):
+                        # self.get_logger().info(f'in detected enemies array: {self.detected_enemies[i].tf.transform.translation.x}')
+                        self.x_disp.append(self.detected_enemies[i].tf.transform.translation.x - self.table1_x + 0.1)     #add buffer offset
+                        self.rotate.append(math.atan2(self.detected_enemies[i].tf.transform.translation.y, self.detected_enemies[i].tf.transform.translation.x))
 
-                        x_pos = all_transforms_found[i].transform.translation.x
-                        y_pos = all_transforms_found[i].transform.translation.y
-                        height = all_transforms_found[i].transform.translation.z - self.table1_x.transform.translation.z
+                        x_pos = self.detected_enemies[i].tf.transform.translation.x
+                        y_pos = self.detected_enemies[i].tf.transform.translation.y
+                        height = self.detected_enemies[i].tf.transform.translation.z - self.table1_x
 
                         self.goal_waypoint.position.x = x_pos - (self.lightsaber_full_length*0.75)
                         self.goal_waypoint.position.y = y_pos + self.sign*0.16            #adding slight offset (slightly more than half the block width)
@@ -485,10 +488,12 @@ class MoveGroup(Node):
             if self.moveit.planning:
                 self.state = State.WAYPOINTS_WAIT
             else:
-                self.moveit.plan_traj_to_pose(self.waypoint_movements[self.num_waypoints_completed][self.num_moves_completed])
-                self.num_moves_completed += 1
-                if self.num_moves_completed%2 == 0:
-                    self.num_waypoints_completed += 1
+                self.get_logger().info(f'waypoint array: {self.waypoint_movements}')
+                if self.waypoint_movements:
+                    self.moveit.plan_traj_to_pose(self.waypoint_movements[self.num_waypoints_completed])
+                    self.num_moves_completed += 1
+                    if self.num_moves_completed%2 == 0:
+                        self.num_waypoints_completed += 1
         ############
         # PROPOSED FLOW TO DECIDE ATTACK STYLE
         ############
@@ -500,7 +505,7 @@ class MoveGroup(Node):
         # else switch to execution state
         # repeat with right attack, moving to stab motion if invalid
         # repeat with stab motion, change to no attack possible if invalid
-        
+
         elif self.state == State.STAB_MOTION:
             self.is_stab_motion = True
             joint_waypoints = []
@@ -718,8 +723,8 @@ class MoveGroup(Node):
                         self.dead_enemy_count+= self.enemies_before - self.enemies_after
 
 
-
-        self.dead_count_pub.publish(self.dead_enemy_count)
+        if self.dead_enemy_count:
+            self.dead_count_pub.publish(self.dead_enemy_count)
 
 
 
@@ -1601,7 +1606,7 @@ class MoveGroup(Node):
         return response
 
     def obj_detection_callback(self, data):
-
+        self.get_logger().info(f'object detection: {data}')
         self.detected_objects = data
 
     def update_detected_objects(self, object_type):
