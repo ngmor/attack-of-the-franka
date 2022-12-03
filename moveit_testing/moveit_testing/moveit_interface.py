@@ -492,6 +492,7 @@ class MoveIt():
         elif self._plan_state == _PlanState.GOAL_IK_COMPUTE:
             if new_plan_state:
                 # Trigger compute IK once at start of state
+                # self._node.get_logger().info(f'goal pose: {type(self._goal_pose)}')
                 self._ik_request(self._start_joint_states, self._goal_pose)
 
             # wait for IK to finish

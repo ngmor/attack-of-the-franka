@@ -479,6 +479,7 @@ class MoveGroup(Node):
                         self.knock_enemy_waypoint.orientation.x = math.pi
                         self.knock_enemy_waypoint.orientation.z = -math.pi/16
 
+                        self.get_logger().info("adding waypoints")
                         self.waypoint_movements.append([self.goal_waypoint, self.knock_enemy_waypoint])
 
 
@@ -490,10 +491,14 @@ class MoveGroup(Node):
             else:
                 self.get_logger().info(f'waypoint array: {self.waypoint_movements}')
                 if self.waypoint_movements:
-                    self.moveit.plan_traj_to_pose(self.waypoint_movements[self.num_waypoints_completed])
-                    self.num_moves_completed += 1
-                    if self.num_moves_completed%2 == 0:
-                        self.num_waypoints_completed += 1
+                    try:
+                        self.get_logger().info(f'at index num_waypoints, num_moves: {self.num_waypoints_completed}, {self.num_moves_completed}')
+                        self.moveit.plan_traj_to_pose(self.waypoint_movements[self.num_waypoints_completed][self.num_moves_completed])
+                        self.num_moves_completed += 1
+                        if self.num_moves_completed%2 == 0:
+                            self.num_waypoints_completed += 1
+                    except:
+                        pass
         ############
         # PROPOSED FLOW TO DECIDE ATTACK STYLE
         ############
@@ -756,7 +761,7 @@ class MoveGroup(Node):
         return response
 
     def look_for_enemy_callback(self, request, response):
-        if not self.obstacles_added:
+        if self.obstacles_added == 0:
             self.state = State.SETUP
         else:
             self.state = State.FIND_ALLIES
@@ -1606,7 +1611,7 @@ class MoveGroup(Node):
         return response
 
     def obj_detection_callback(self, data):
-        self.get_logger().info(f'object detection: {data}')
+        # self.get_logger().info(f'object detection: {data}')
         self.detected_objects = data
 
     def update_detected_objects(self, object_type):
