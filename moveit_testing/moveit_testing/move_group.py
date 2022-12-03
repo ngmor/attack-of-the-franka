@@ -287,7 +287,9 @@ class MoveGroup(Node):
         self.num_moves_completed = 0
         self.is_stab_motion = False
 
-
+        self.block_height = 0.1
+        self.block_width = 0.05
+        self.block_length = 0.03
 
     def obstacle_info(self):
         """
@@ -507,31 +509,8 @@ class MoveGroup(Node):
                 #goal waypoint
                 self.goal_waypoint = geometry_msgs.msg.Pose()
 
-<<<<<<< HEAD
-                self.goal_waypoint.position.x = enemy00.transform.translation.x + (self.lightsaber_full_length*0.25)
-                self.goal_waypoint.position.y = enemy00.transform.translation.y           #adding slight offset (slightly more than half the block width)
-                self.goal_waypoint.position.z = -self.table_offset + height + 0.18
-
-                orientation = angle_axis_to_quaternion(math.pi, [1,0,0])
-                self.goal_waypoint.orientation.x = math.pi
-                self.goal_waypoint.orientation.z = -math.pi/16
-
-                self.knock_enemy_waypoint = geometry_msgs.msg.Pose()
-                self.knock_enemy_waypoint.position.x = enemy00.transform.translation.x - (self.lightsaber_full_length*0.75)
-                self.knock_enemy_waypoint.position.y = enemy00.transform.translation.y + 0.0725            #adding slight offset (slightly more than half the block width)
-                self.knock_enemy_waypoint.position.z = -self.table_offset + height + 0.18
-                self.knock_enemy_waypoint.orientation.x = math.pi
-                self.knock_enemy_waypoint.orientation.z = -math.pi/16
-
-                # #goal waypoint
-                # self.goal_waypoint = geometry_msgs.msg.Pose()
-
-                # self.goal_waypoint.position.x = enemy00.transform.translation.x - (self.lightsaber_full_length*0.75)
-                # self.goal_waypoint.position.y = enemy00.transform.translation.y + 0.16            #adding slight offset (slightly more than half the block width)
-=======
                 # self.goal_waypoint.position.x = self.enemy00.transform.translation.x - (self.lightsaber_full_length*0.75)
                 # self.goal_waypoint.position.y = self.enemy00.transform.translation.y + 0.16            #adding slight offset (slightly more than half the block width)
->>>>>>> a601cac285cf34142ae1fbd8ab6669a84fc3af83
                 # self.goal_waypoint.position.z = -self.table_offset + height + 0.18
 
                 # orientation = angle_axis_to_quaternion(math.pi, [1,0,0])
@@ -567,6 +546,18 @@ class MoveGroup(Node):
                 # else:
                 #     self.dynamic_move = False
                 #     self.state = State.STAB_MOTION
+        
+        ############
+        # PROPOSED FLOW TO DECIDE ATTACK STYLE
+        ############
+        # after look for enemy or look for ally, first try a left attack
+        # call function to check if ally in danger from enemy fall
+        # if returns false, change the state to check right attack
+        # else, create the waypoints and check in the plan returns an error
+        # if returns an error, change state to right attack
+        # else switch to execution state
+        # repeat with right attack, moving to stab motion if invalid
+        # repeat with stab motion, change to no attack possible if invalid
 
         elif self.state == State.STAB_MOTION:
             self.num_movements = 4
@@ -1700,6 +1691,28 @@ class MoveGroup(Node):
         
         # Indicate if all transforms were found
         return all_transforms_found
+
+    def check_ally_danger_fall(self, enemy_obj, swing_style):
+        # y is left to right
+        # x is forward to backward
+        enemy_to_ally = DetectedObjectData(enemy_obj)
+        for ally in self.detected_allies:
+            enemy_to_ally = self.tf_buffer.lookup_transform(ally.obj.name, enemy_obj.obj.name, rclpy.time.Time())
+            dist_y = enemy_to_ally.transform.translation.y
+            dist_x = enemy_to_ally.transform.translation.x
+            if swing_style == 1:
+                # swinging so the brick falls to the left from desk view
+                if ((dist_y+0.5*self.block_width) < self.block_height) and ((dist_x+0.5*self.block_width) < self.block_width):
+                    return False
+            if swing_style == 2:
+                # swinging so the brick falls to the right
+                if ((dist_y+0.5*self.block_width) < -self.block_height) and ((dist_x+0.5*self.block_width) < -self.block_width):
+                    return False
+            if swing_style == 3:
+                # swinging so the brick falls straight backwards
+                if ((dist_x+0.5*self.block_width) < self.block_height) and ((dist_y+0.5*self.block_width) < self.block_width):
+                    return False
+        return True
 
 def movegroup_entry(args=None):
     rclpy.init(args=args)
