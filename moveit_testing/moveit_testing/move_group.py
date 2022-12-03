@@ -300,7 +300,7 @@ class MoveGroup(Node):
 
         self.num_waypoints_completed = 0
 
-
+        self.enemies_before = 0
     def obstacle_info(self):
         """
         Get robot transformation from base frame to end-effector frame.
@@ -467,7 +467,7 @@ class MoveGroup(Node):
 
                         self.goal_waypoint.position.x = x_pos - (self.lightsaber_full_length*0.75)
                         self.goal_waypoint.position.y = y_pos + self.sign*0.16            #adding slight offset (slightly more than half the block width)
-                        self.goal_waypoint.position.z = -self.table_offset + height + 0.18
+                        self.goal_waypoint.position.z = 0.5 #-self.table_offset + height + 0.18
 
                         self.goal_waypoint.orientation.x = math.pi
                         self.goal_waypoint.orientation.z = -math.pi/16
