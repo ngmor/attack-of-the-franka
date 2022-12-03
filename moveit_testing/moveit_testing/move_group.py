@@ -59,6 +59,12 @@ class State(Enum):
     DYNAMIC_MOTION = auto(),
     STAB_MOTION = auto()
 
+# class MotionDecision():
+    # bool DynamicMotionRight(),
+    # bool StabMotion(),
+    #     self.sign = 1
+
+
 class DetectedObjectData():
 
     def __init__(self, obj):
@@ -287,6 +293,7 @@ class MoveGroup(Node):
         self.num_moves_completed = 0
         self.is_stab_motion = False
 
+        self.sign = 1
 
 
     def obstacle_info(self):
@@ -359,7 +366,7 @@ class MoveGroup(Node):
             self.moveit.update_obstacles([obstacle], delete=False)
         except TransformException:
             pass
-
+ 
 
 
         # State machine
@@ -442,7 +449,7 @@ class MoveGroup(Node):
 
         elif self.state == State.LOOK_FOR_ENEMY:
             self.waypoints = 0
-            if self.moveit._state == self.moveit._state.IDLE:
+            if not self.moveit.busy:
                 try:
                     ally00 = self.tf_buffer.lookup_transform(FRAMES.PANDA_BASE, FRAMES.ALLY + '00', rclpy.time.Time())
                 except TransformException:
@@ -496,7 +503,6 @@ class MoveGroup(Node):
 
 
         elif self.state == State.DYNAMIC_MOTION:
-            self.num_movements = 2
             if self.moveit.planning:
                 self.state = State.WAYPOINTS_WAIT
             else:
@@ -517,8 +523,8 @@ class MoveGroup(Node):
 
                 #bad example
                 self.goal_waypoint.position.x = self.enemy00.transform.translation.x - (self.lightsaber_full_length*0.75)
-                self.goal_waypoint.position.y = self.enemy00.transform.translation.y + 0.16            #adding slight offset (slightly more than half the block width)
-                self.goal_waypoint.position.z = -self.table_offset + height - 0.18
+                self.goal_waypoint.position.y = self.enemy00.transform.translation.y + self.sign*0.16            #adding slight offset (slightly more than half the block width)
+                self.goal_waypoint.position.z = -self.table_offset + height + 0.18
 
                 orientation = angle_axis_to_quaternion(math.pi, [1,0,0])
                 self.goal_waypoint.orientation.x = math.pi
@@ -527,12 +533,13 @@ class MoveGroup(Node):
 
                 self.knock_enemy_waypoint = geometry_msgs.msg.Pose()
                 self.knock_enemy_waypoint.position.x = self.enemy00.transform.translation.x - (self.lightsaber_full_length*0.75)
-                self.knock_enemy_waypoint.position.y = self.enemy00.transform.translation.y + 0.0725            #adding slight offset (slightly more than half the block width)
+                self.knock_enemy_waypoint.position.y = self.enemy00.transform.translation.y + self.sign*0.0725            #adding slight offset (slightly more than half the block width)
                 self.knock_enemy_waypoint.position.z = -self.table_offset + height + 0.18
                 self.knock_enemy_waypoint.orientation.x = math.pi
                 self.knock_enemy_waypoint.orientation.z = -math.pi/16
 
                 waypoint_movements = [self.goal_waypoint, self.knock_enemy_waypoint]
+                self.num_movements = len(waypoint_movements)
 
                 self.moveit.plan_traj_to_pose(waypoint_movements[self.num_moves_completed])
                 self.num_moves_completed += 1
@@ -546,7 +553,6 @@ class MoveGroup(Node):
                 #     self.state = State.STAB_MOTION
 
         elif self.state == State.STAB_MOTION:
-            self.num_movements = 4
             self.is_stab_motion = True
             if self.moveit.planning:
                 self.state = State.WAYPOINTS_WAIT
@@ -595,7 +601,7 @@ class MoveGroup(Node):
                                         0.0,                  # 0.035, 0.0 panda_finger_joint1
                                         0.0   
                                         ]
-                
+
                 self.waypoint_joints4 = [self.rotate,        #ONLY CHANGE THIS ONE(rotate panda_joint1)
                                         math.radians(-50),    # panda_joint2
                                         math.radians(-1),                    # panda_joint3
@@ -610,6 +616,7 @@ class MoveGroup(Node):
                                         ]
 
                 joint_movements = [self.waypoint_joints1, self.waypoint_joints2, self.waypoint_joints3, self.waypoint_joints4]
+                self.num_movements = len(joint_movements)
 
                 self.moveit.joint_waypoints(joint_movements[self.num_moves_completed])
                 self.num_moves_completed += 1
@@ -641,6 +648,9 @@ class MoveGroup(Node):
                 if self.moveit.get_last_error() == MoveItApiErrors.NO_ERROR:
                     self.state = State.EXECUTE_START
                     self.get_logger().info("start execute!")
+                elif self.sign == 1:
+                    self.sign = -1
+                    self.state = State.DYNAMIC_MOTION
                 elif not self.is_stab_motion:
                     self.num_moves_completed = 0
                     self.state = State.STAB_MOTION
