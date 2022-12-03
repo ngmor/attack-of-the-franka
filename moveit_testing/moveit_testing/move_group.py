@@ -519,8 +519,31 @@ class MoveGroup(Node):
                 #goal waypoint
                 self.goal_waypoint = geometry_msgs.msg.Pose()
 
+<<<<<<< HEAD
+                self.goal_waypoint.position.x = enemy00.transform.translation.x + (self.lightsaber_full_length*0.25)
+                self.goal_waypoint.position.y = enemy00.transform.translation.y           #adding slight offset (slightly more than half the block width)
+                self.goal_waypoint.position.z = -self.table_offset + height + 0.18
+
+                orientation = angle_axis_to_quaternion(math.pi, [1,0,0])
+                self.goal_waypoint.orientation.x = math.pi
+                self.goal_waypoint.orientation.z = -math.pi/16
+
+                self.knock_enemy_waypoint = geometry_msgs.msg.Pose()
+                self.knock_enemy_waypoint.position.x = enemy00.transform.translation.x - (self.lightsaber_full_length*0.75)
+                self.knock_enemy_waypoint.position.y = enemy00.transform.translation.y + 0.0725            #adding slight offset (slightly more than half the block width)
+                self.knock_enemy_waypoint.position.z = -self.table_offset + height + 0.18
+                self.knock_enemy_waypoint.orientation.x = math.pi
+                self.knock_enemy_waypoint.orientation.z = -math.pi/16
+
+                # #goal waypoint
+                # self.goal_waypoint = geometry_msgs.msg.Pose()
+
+                # self.goal_waypoint.position.x = enemy00.transform.translation.x - (self.lightsaber_full_length*0.75)
+                # self.goal_waypoint.position.y = enemy00.transform.translation.y + 0.16            #adding slight offset (slightly more than half the block width)
+=======
                 # self.goal_waypoint.position.x = self.enemy00.transform.translation.x - (self.lightsaber_full_length*0.75)
                 # self.goal_waypoint.position.y = self.enemy00.transform.translation.y + 0.16            #adding slight offset (slightly more than half the block width)
+>>>>>>> a601cac285cf34142ae1fbd8ab6669a84fc3af83
                 # self.goal_waypoint.position.z = -self.table_offset + height + 0.18
 
                 # orientation = angle_axis_to_quaternion(math.pi, [1,0,0])
