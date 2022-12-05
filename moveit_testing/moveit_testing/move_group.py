@@ -59,7 +59,27 @@ class State(Enum):
     FIND_ALLIES = auto(),
     DYNAMIC_MOTION = auto(),
     STAB_MOTION = auto(),
-    ENEMIES_KILLED_COUNT = auto()
+    PICKUP_LIGHTSABER = auto(),
+
+class PickupLightsaberState(Enum):
+    """State machine for lightsaber pickup subsequence."""
+
+    ADD_COLLISION = auto(),
+    MOVE_TO_HOME_START = auto(),
+    MOVE_TO_HOME_WAIT = auto(),
+    OPEN_START = auto(),
+    OPEN_WAIT = auto(),
+    MOVE_TO_LIGHTSABER_START = auto(),
+    MOVE_TO_LIGHTSABER_WAIT = auto(),
+    GRASP_START = auto(),
+    GRASP_WAIT = auto(),
+    SWITCH_TO_ATTACHED_COLLISION = auto(),
+    LIFT_START = auto(),
+    LIFT_WAIT = auto(),
+    RETURN_TO_HOME_START = auto(),
+    RETURN_TO_HOME_WAIT = auto(),
+
+
 
 class DetectedObjectData():
 
@@ -123,6 +143,8 @@ class MoveGroup(Node):
         self.srv_grippers = self.create_service(
             moveit_msgs.srv.GraspPlanning,
             'grasp_plan', self.gripper_callback)
+        self.srv_pickup_lightsaber = self.create_service(std_srvs.srv.Empty, 'pickup_lightsaber',
+                                                         self.pickup_lightsaber_callback)
         self.pickup_action_client = ActionClient(self, control_msgs.action.GripperCommand,
                                          'panda_gripper/gripper_action')
         
@@ -249,8 +271,10 @@ class MoveGroup(Node):
         self.goal_waypoint = geometry_msgs.msg.Pose()
         self.plan = None
 
-        # self.state = State.IDLE
         self.state = State.IDLE
+        self.state_last = None
+        self.pickup_lightsaber_state = PickupLightsaberState.ADD_COLLISION
+        self.pickup_lightsaber_state_last = None
 
         self.get_logger().info("moveit_interface_tester node started")
 
@@ -301,6 +325,7 @@ class MoveGroup(Node):
         self.num_waypoints_completed = 0
 
         self.enemies_before = 0
+
     def obstacle_info(self):
         """
         Get robot transformation from base frame to end-effector frame.
@@ -375,6 +400,13 @@ class MoveGroup(Node):
         self.moveit.handle()
 
         self.find_allies()
+
+        new_state = self.state != self.state_last
+
+        if new_state:
+            self.get_logger().info(
+                f"MoveGroup main sequence changed to {self.state.name}")
+            self.state_last = self.state
 
         # State machine
         if self.state == State.MOVE_TO_HOME_START:
@@ -666,6 +698,19 @@ class MoveGroup(Node):
                 self.get_logger().info("next waypoint!")
                 self.state = State.WAYPOINTS
 
+        # Draw waypoints
+        elif self.state == State.PICKUP_LIGHTSABER:
+
+            # reset subsequence on first callback of PICKUP_LIGHTSABER state
+            if new_state:
+                self.pickup_lightsaber_state = PickupLightsaberState.ADD_COLLISION
+
+            # Execute subsequence to pickup the lightsaber
+            # this method returns true if the subsequence is complete, false if not
+            if self.pickup_lightsaber_sequence():
+                # Return to IDLE
+                self.state = State.IDLE
+
         elif self.state == State.PLAN_TO_POSE_START:
 
             # if self.waypoints == 1:
@@ -756,7 +801,25 @@ class MoveGroup(Node):
         if self.dead_enemy_count:
             self.dead_count_pub.publish(self.dead_enemy_count)
 
+    def pickup_lightsaber_sequence(self):
+        """TODO"""
 
+        done = False
+
+        if self.pickup_lightsaber_state != self.pickup_lightsaber_state_last:
+            self.get_logger().debug(f"Pickup lightsaber sequence changed to {self.pickup_lightsaber_state.name}")
+            self.pickup_lightsaber_state_last = self.pickup_lightsaber_state
+
+
+        return done
+
+    def pickup_lightsaber_callback(self, request, response):
+        """Begin lightsaber subsequence if currently in IDLE."""
+
+        if self.state == State.IDLE:
+            self.state = State.PICKUP_LIGHTSABER
+
+        return response
 
     def move_to_home_callback(self, request, response):
         """
