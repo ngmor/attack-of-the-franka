@@ -1726,8 +1726,8 @@ class MoveGroup(Node):
             if swing_style == 2:
                 # swinging so the brick falls straight backwards
                 self.get_logger().info(f'dist_y factor {(dist_y-0.5*self.block_width)}, {(self.block_height+self.block_width*0.5)}')
-                self.get_logger().info(f'dist_x factor {abs(dist_x-0.5*self.block_width)}, {self.block_width}')
-                if (abs(dist_x-0.5*self.block_width) < self.block_width) and ((dist_y-0.5*self.block_width) < (self.block_height+self.block_width*0.5)):
+                self.get_logger().info(f'dist_x factor {(abs(dist_x)-0.5*self.block_width)}, {self.block_width}')
+                if ((abs(dist_x)-0.5*self.block_width) < self.block_width) and ((dist_y-0.5*self.block_width) < (self.block_height+self.block_width*0.5)):
                     self.get_logger().info(f'not safe to attack in stabbing style')
                     # return False
             # self.get_logger().info(f'safe to attack in style {swing_style}')
