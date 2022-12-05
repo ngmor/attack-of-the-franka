@@ -180,6 +180,14 @@ class ContourData():
                     (self.coord.z >= z_limits.lower) and
                     (self.coord.z <= z_limits.upper))
 
+    def depth_within_bounds(self, limits):
+        """Return if the camera coordinate depth are within the input limits"""
+        if self.coord is None:
+            return False
+        else:
+            return ((self.coord.x >= limits.lower) and 
+                    (self.coord.x <= limits.upper))
+
     def get_frame_name(self, number):
         """Get the frame name of the object by inputting which number it is."""
 
@@ -272,6 +280,12 @@ class CameraProcessor(Node):
         self.declare_parameter("robot_table.x_tag_edge_to_table_edge", 0.023,
                                ParameterDescriptor(description="X edge of AprilTag to edge of robot table"))
         self.robot_table_x_tag_edge_to_table_edge = self.get_parameter("robot_table.x_tag_edge_to_table_edge").get_parameter_value().double_value
+        self.declare_parameter("depth_filter.min_offset", 0.0,
+                               ParameterDescriptor(description="Depth filter minimum offset"))
+        self.depth_filter_min = self.get_parameter("depth_filter.min_offset").get_parameter_value().double_value
+        self.declare_parameter("depth_filter.max_offset", 0.5,
+                               ParameterDescriptor(description="Depth filter maximum offset"))
+        self.depth_filter_max = self.get_parameter("depth_filter.max_offset").get_parameter_value().double_value
 
         # sliders get precedence over AprilTags
         if self.enable_work_area_sliders and self.enable_work_area_apriltags:
@@ -293,7 +307,7 @@ class CameraProcessor(Node):
             cv2.namedWindow(self.enemy_mask_window_name, cv2.WINDOW_NORMAL)
 
         self.filter_kernel = 5
-        self.area_threshold = 2000
+        self.area_threshold = 1250
 
         if self.enable_filtering_sliders:
             cv2.createTrackbar('Kernel', self.color_window_name,self.filter_kernel,50,self.trackbar_filter_kernel)
@@ -312,12 +326,16 @@ class CameraProcessor(Node):
         self.broadcaster = TransformBroadcaster(self)
         self.buffer = Buffer()
         self.listener = TransformListener(self.buffer, self)
-        self.tf_camera_to_workspace1 = None
-        self.tf_camera_to_workspace2 = None
-        self.workspace1_pixel = Pixel()
-        self.workspace2_pixel = Pixel()
-        self.work_area_limits_y = Limits()  # color camera frame, from AprilTags
-        self.work_area_limits_z = Limits()  # color camera frame, from AprilTags
+        self.tf_camera_to_robot_table_raw = None
+        self.tf_camera_to_workspace1_raw = None
+        self.tf_camera_to_workspace2_raw = None
+        self.tf_workspace_min = None
+        self.tf_workspace_max = None
+        self.workspace_min_pixel = Pixel()
+        self.workspace_max_pixel = Pixel()
+        self.work_area_limits_x = Limits()  # color camera frame coordinates, from AprilTags (depth)
+        self.work_area_limits_y = Limits()  # color camera frame coordinates, from AprilTags
+        self.work_area_limits_z = Limits()  # color camera frame coordinates, from AprilTags
 
         # Publish static transform between AprilTag on robot table and robot base
         tf_table_apriltag_to_base = TransformStamped()
@@ -388,6 +406,10 @@ class CameraProcessor(Node):
                             if not contour_data.coord_within_bounds(self.work_area_limits_y,self.work_area_limits_z):
                                 include_contour = False
 
+                            if self.depth_filter_min != self.depth_filter_max:
+                                if not contour_data.depth_within_bounds(self.work_area_limits_x):
+                                    include_contour = False
+
                         if include_contour:
                             self.contours_filtered_ally.append(contour_data)
 
@@ -429,6 +451,11 @@ class CameraProcessor(Node):
                         elif self.enable_work_area_apriltags and self.work_area_apriltags_detected:
                             if not contour_data.coord_within_bounds(self.work_area_limits_y,self.work_area_limits_z):
                                 include_contour = False
+
+                            if self.depth_filter_min != self.depth_filter_max:
+                                if not contour_data.depth_within_bounds(self.work_area_limits_x):
+                                    include_contour = False
+
 
                         if include_contour:
                             self.contours_filtered_enemy.append(contour_data)
@@ -490,7 +517,7 @@ class CameraProcessor(Node):
         if self.enable_work_area_sliders:
             color_image_with_tracking = cv2.rectangle(color_image_with_tracking, (self.x_limits.value.lower,self.y_limits.value.lower),(self.x_limits.value.upper,self.y_limits.value.upper),color=(0, 255, 0), thickness=1)
         elif self.enable_work_area_apriltags:
-            color_image_with_tracking = cv2.rectangle(color_image_with_tracking, (self.workspace1_pixel.x,self.workspace1_pixel.y),(self.workspace2_pixel.x,self.workspace2_pixel.y),color=(0, 255, 0), thickness=1)
+            color_image_with_tracking = cv2.rectangle(color_image_with_tracking, (self.workspace_min_pixel.x,self.workspace_min_pixel.y),(self.workspace_max_pixel.x,self.workspace_max_pixel.y),color=(0, 255, 0), thickness=1)
 
 
         color_image_with_tracking = cv2.putText(color_image_with_tracking, f'Allies: {len(self.contours_filtered_ally)}',(50,50),cv2.FONT_HERSHEY_DUPLEX,1,(255,0,0))
@@ -501,53 +528,108 @@ class CameraProcessor(Node):
         cv2.waitKey(1)
     
     def get_transforms(self):
+
+        time = self.get_clock().now().to_msg()
+
+        # Get panda table transformations if possible
+        try:
+            self.tf_camera_to_robot_table_raw = self.buffer.lookup_transform(
+                FRAMES().CAMERA_COLOR,
+                FRAMES().PANDA_TABLE_RAW,
+                rclpy.time.Time()
+            )
+        except Exception:
+            pass
+
+        # Broadcast last known transforms even if we lose AprilTags
+        if self.tf_camera_to_robot_table_raw is not None:
+            transform = copy.deepcopy(self.tf_camera_to_robot_table_raw)
+            transform.child_frame_id = FRAMES().PANDA_TABLE
+            transform.header.stamp = time
+
+            self.broadcaster.sendTransform(transform)
+
         # Get workspace transformations if possible
         if self.enable_work_area_apriltags:
             try:
-                self.tf_camera_to_workspace1 = self.buffer.lookup_transform(
+                self.tf_camera_to_workspace1_raw = self.buffer.lookup_transform(
                     FRAMES().CAMERA_COLOR,
-                    FRAMES().WORK_TABLE1,
+                    FRAMES().WORK_TABLE1_RAW,
                     rclpy.time.Time()
                 )
             except Exception:
                 pass
 
             try:
-                self.tf_camera_to_workspace2 = self.buffer.lookup_transform(
+                self.tf_camera_to_workspace2_raw = self.buffer.lookup_transform(
                     FRAMES().CAMERA_COLOR,
-                    FRAMES().WORK_TABLE2,
+                    FRAMES().WORK_TABLE2_RAW,
                     rclpy.time.Time()
                 )
             except Exception:
                 pass
 
         self.work_area_apriltags_detected = (
-            (self.tf_camera_to_workspace1 is not None) 
-            and (self.tf_camera_to_workspace2 is not None)
+            (self.tf_camera_to_workspace1_raw is not None) 
+            and (self.tf_camera_to_workspace2_raw is not None)
         )
 
-        # Determine bounds from work area AprilTags
+        # Broadcast last known transforms even if we lose AprilTags
+        if self.tf_camera_to_workspace1_raw is not None:
+            transform = copy.deepcopy(self.tf_camera_to_workspace1_raw)
+            transform.child_frame_id = FRAMES().WORK_TABLE1
+            transform.header.stamp = time
+
+            self.broadcaster.sendTransform(transform)
+
+        if self.tf_camera_to_workspace2_raw is not None:
+            transform = copy.deepcopy(self.tf_camera_to_workspace2_raw)
+            transform.child_frame_id = FRAMES().WORK_TABLE2
+            transform.header.stamp = time
+
+            self.broadcaster.sendTransform(transform)
+
+        
         if self.work_area_apriltags_detected:
+            # Determine bounds from work area AprilTags
             self.work_area_limits_y.lower = min(
-                self.tf_camera_to_workspace1.transform.translation.y,
-                self.tf_camera_to_workspace2.transform.translation.y
+                self.tf_camera_to_workspace1_raw.transform.translation.y,
+                self.tf_camera_to_workspace2_raw.transform.translation.y
             ) - self.work_area_tag_size / 2.
             self.work_area_limits_y.upper = max(
-                self.tf_camera_to_workspace1.transform.translation.y,
-                self.tf_camera_to_workspace2.transform.translation.y
+                self.tf_camera_to_workspace1_raw.transform.translation.y,
+                self.tf_camera_to_workspace2_raw.transform.translation.y
             ) + self.work_area_tag_size / 2.
             self.work_area_limits_z.lower = min(
-                self.tf_camera_to_workspace1.transform.translation.z,
-                self.tf_camera_to_workspace2.transform.translation.z
+                self.tf_camera_to_workspace1_raw.transform.translation.z,
+                self.tf_camera_to_workspace2_raw.transform.translation.z
             ) - self.work_area_tag_size / 2.
             self.work_area_limits_z.upper = max(
-                self.tf_camera_to_workspace1.transform.translation.z,
-                self.tf_camera_to_workspace2.transform.translation.z
+                self.tf_camera_to_workspace1_raw.transform.translation.z,
+                self.tf_camera_to_workspace2_raw.transform.translation.z
             ) + self.work_area_tag_size / 2.
+            table_depth = min(
+                self.tf_camera_to_workspace1_raw.transform.translation.x,
+                self.tf_camera_to_workspace2_raw.transform.translation.x
+            )
+            # Inverted minus sign and min/max due to direction of camera frame x axis
+            self.work_area_limits_x.lower = table_depth - self.depth_filter_max
+            self.work_area_limits_x.upper = table_depth - self.depth_filter_min
 
             # Get pixel coordinates to draw on picture
-            self.workspace1_pixel.get_from_camera_coordinates(self.intrinsics,self.tf_camera_to_workspace1.transform.translation)
-            self.workspace2_pixel.get_from_camera_coordinates(self.intrinsics,self.tf_camera_to_workspace2.transform.translation)
+            # TODO - turn into actual transforms and publish?
+            self.tf_workspace_min = TransformStamped()
+            self.tf_workspace_min.transform.translation.x = table_depth
+            self.tf_workspace_min.transform.translation.y = self.work_area_limits_y.lower
+            self.tf_workspace_min.transform.translation.z = self.work_area_limits_z.lower
+
+            self.tf_workspace_max = TransformStamped()
+            self.tf_workspace_max.transform.translation.x = table_depth
+            self.tf_workspace_max.transform.translation.y = self.work_area_limits_y.upper
+            self.tf_workspace_max.transform.translation.z = self.work_area_limits_z.upper
+
+            self.workspace_min_pixel.get_from_camera_coordinates(self.intrinsics, self.tf_workspace_min.transform.translation)
+            self.workspace_max_pixel.get_from_camera_coordinates(self.intrinsics, self.tf_workspace_max.transform.translation)
 
 
     def trackbar_filter_kernel(self,val):

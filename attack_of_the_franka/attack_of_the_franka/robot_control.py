@@ -15,7 +15,7 @@
 import rclpy
 from rclpy.node import Node
 from rclpy.action import ActionServer, ActionClient
-from .moveit_interface import MoveIt, MoveConfig, MoveItApiErrors
+from moveit_testing.moveit_interface import MoveIt, MoveConfig, MoveItApiErrors
 import geometry_msgs.msg
 import moveit_msgs.action
 import moveit_msgs.srv
@@ -87,7 +87,7 @@ class DetectedObjectData():
         self.obj = obj
         self.tf = None
 
-class MoveGroup(Node):
+class RobotControl(Node):
     """
     Control robot and planning scene using the moveit_interface API.
 
@@ -105,7 +105,7 @@ class MoveGroup(Node):
 
     def __init__(self):
         """Class constructor."""
-        super().__init__('MoveGroup')
+        super().__init__('robot_control')
 
         self.interval = 1.0 / 100.0
         self.timer = self.create_timer(self.interval, self.timer_callback)
@@ -276,8 +276,6 @@ class MoveGroup(Node):
         self.pickup_lightsaber_state = PickupLightsaberState.ADD_COLLISION
         self.pickup_lightsaber_state_last = None
 
-        self.get_logger().info("moveit_interface_tester node started")
-
         self.grip = 0
 
         self.joint_traj = trajectory_msgs.msg.JointTrajectory()
@@ -319,12 +317,14 @@ class MoveGroup(Node):
         self.block_length = 0.08
         self.sign = 1
         self.dead_count_pub = self.create_publisher(Int16, 'enemy_dead_count', 10)
-        self.dead_enemy_count = None
-        self.enemy_cnt = 0
+        self.dead_enemy_count = 0
+        self.enemies_after = 0
+        self.enemies_before = 0
 
         self.num_waypoints_completed = 0
 
-        self.enemies_before = 0
+        self.get_logger().info("robot_control node started")
+
 
     def obstacle_info(self):
         """
@@ -486,7 +486,7 @@ class MoveGroup(Node):
             self.goal_waypoint = geometry_msgs.msg.Pose()
             if not self.moveit.busy:
                 if all_transforms_found:
-                    self.enemies_after = len(self.detected_enemies)
+                    self.enemies_before = len(self.detected_enemies)
                     # self.get_logger().info(f'length: {len(self.detected_enemies)}')
                     for i in range(len(self.detected_enemies)):
                         # self.get_logger().info(f'in detected enemies array: {self.detected_enemies[i].tf.transform.translation.x}')
@@ -531,7 +531,7 @@ class MoveGroup(Node):
                         # self.get_logger().info(f'at index num_waypoints, num_moves: {self.num_waypoints_completed}, {self.num_moves_completed}')
                         self.moveit.plan_traj_to_pose(self.waypoint_movements[self.num_waypoints_completed][self.num_moves_completed])
                         self.num_moves_completed += 1
-                        if self.num_moves_completed%2 == 0:
+                        if self.num_moves_completed % 2 == 0:
                             self.num_waypoints_completed += 1
                     except:
                         self.state = State.IDLE
@@ -794,12 +794,11 @@ class MoveGroup(Node):
                     if all_transforms_found:
                         self.enemies_after = len(self.detected_enemies)
                         self.state = State.MOVE_TO_HOME_START
-                        # TODO: change - self.enemies_before is currently hard coded to 0 in the init
-                        self.dead_enemy_count+= self.enemies_before - self.enemies_after
+                        
+                        self.dead_enemy_count += self.enemies_before - self.enemies_after
 
 
-        if self.dead_enemy_count:
-            self.dead_count_pub.publish(self.dead_enemy_count)
+        self.dead_count_pub.publish(self.dead_enemy_count)
 
     def pickup_lightsaber_sequence(self):
         """TODO"""
@@ -1796,8 +1795,8 @@ class MoveGroup(Node):
             # self.get_logger().info(f'safe to attack in style {swing_style}')
         return True
 
-def movegroup_entry(args=None):
+def entry(args=None):
     rclpy.init(args=args)
-    movegroup = MoveGroup()
-    rclpy.spin(movegroup)
+    robot_control = RobotControl()
+    rclpy.spin(robot_control)
     rclpy.shutdown()

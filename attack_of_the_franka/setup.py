@@ -12,6 +12,7 @@ setup(
         ('share/' + package_name, [
             'package.xml',
             'launch/realsense.launch.py',
+            'launch/robot.launch.py',
             'config/apriltag.yaml',
             'config/apriltag.rviz',
             'config/parameters.yaml',
@@ -26,7 +27,8 @@ setup(
     tests_require=['pytest'],
     entry_points={
         'console_scripts': [
-            'camera_processor = attack_of_the_franka.camera_processor:entry'
+            'camera_processor = attack_of_the_franka.camera_processor:entry',
+            'robot_control = attack_of_the_franka.robot_control:entry'
         ],
     },
 )
