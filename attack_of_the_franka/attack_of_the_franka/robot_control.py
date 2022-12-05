@@ -15,7 +15,7 @@
 import rclpy
 from rclpy.node import Node
 from rclpy.action import ActionServer, ActionClient
-from .moveit_interface import MoveIt, MoveConfig, MoveItApiErrors
+from moveit_testing.moveit_interface import MoveIt, MoveConfig, MoveItApiErrors
 import geometry_msgs.msg
 import moveit_msgs.action
 import moveit_msgs.srv
@@ -67,7 +67,7 @@ class DetectedObjectData():
         self.obj = obj
         self.tf = None
 
-class MoveGroup(Node):
+class RobotControl(Node):
     """
     Control robot and planning scene using the moveit_interface API.
 
@@ -85,7 +85,7 @@ class MoveGroup(Node):
 
     def __init__(self):
         """Class constructor."""
-        super().__init__('MoveGroup')
+        super().__init__('robot_control')
 
         self.interval = 1.0 / 100.0
         self.timer = self.create_timer(self.interval, self.timer_callback)
@@ -252,8 +252,6 @@ class MoveGroup(Node):
         # self.state = State.IDLE
         self.state = State.IDLE
 
-        self.get_logger().info("moveit_interface_tester node started")
-
         self.grip = 0
 
         self.joint_traj = trajectory_msgs.msg.JointTrajectory()
@@ -301,6 +299,10 @@ class MoveGroup(Node):
         self.num_waypoints_completed = 0
 
         self.enemies_before = 0
+
+        self.get_logger().info("robot_control node started")
+
+
     def obstacle_info(self):
         """
         Get robot transformation from base frame to end-effector frame.
@@ -1733,8 +1735,8 @@ class MoveGroup(Node):
             # self.get_logger().info(f'safe to attack in style {swing_style}')
         return True
 
-def movegroup_entry(args=None):
+def entry(args=None):
     rclpy.init(args=args)
-    movegroup = MoveGroup()
-    rclpy.spin(movegroup)
+    robot_control = RobotControl()
+    rclpy.spin(robot_control)
     rclpy.shutdown()

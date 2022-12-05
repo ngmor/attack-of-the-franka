@@ -26,7 +26,8 @@ setup(
     tests_require=['pytest'],
     entry_points={
         'console_scripts': [
-            'camera_processor = attack_of_the_franka.camera_processor:entry'
+            'camera_processor = attack_of_the_franka.camera_processor:entry',
+            'robot_control = attack_of_the_franka.robot_control:entry'
         ],
     },
 )
