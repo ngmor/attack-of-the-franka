@@ -20,3 +20,6 @@
       full_length: 1.122 # m
       grip_offset: 0.15 # m
       gripper_height: 0.08 #m
+    depth_filter:
+      min_offset: 0.075 # m
+      max_offset: 0.5 # m
