@@ -293,12 +293,11 @@ class RobotControl(Node):
         self.block_length = 0.08
         self.sign = 1
         self.dead_count_pub = self.create_publisher(Int16, 'enemy_dead_count', 10)
-        self.dead_enemy_count = None
-        self.enemy_cnt = 0
+        self.dead_enemy_count = 0
+        self.enemies_after = 0
+        self.enemies_before = 0
 
         self.num_waypoints_completed = 0
-
-        self.enemies_before = 0
 
         self.get_logger().info("robot_control node started")
 
@@ -456,7 +455,7 @@ class RobotControl(Node):
             self.goal_waypoint = geometry_msgs.msg.Pose()
             if not self.moveit.busy:
                 if all_transforms_found:
-                    self.enemies_after = len(self.detected_enemies)
+                    self.enemies_before = len(self.detected_enemies)
                     # self.get_logger().info(f'length: {len(self.detected_enemies)}')
                     for i in range(len(self.detected_enemies)):
                         # self.get_logger().info(f'in detected enemies array: {self.detected_enemies[i].tf.transform.translation.x}')
@@ -501,7 +500,7 @@ class RobotControl(Node):
                         # self.get_logger().info(f'at index num_waypoints, num_moves: {self.num_waypoints_completed}, {self.num_moves_completed}')
                         self.moveit.plan_traj_to_pose(self.waypoint_movements[self.num_waypoints_completed][self.num_moves_completed])
                         self.num_moves_completed += 1
-                        if self.num_moves_completed%2 == 0:
+                        if self.num_moves_completed % 2 == 0:
                             self.num_waypoints_completed += 1
                     except:
                         self.state = State.IDLE
@@ -751,12 +750,11 @@ class RobotControl(Node):
                     if all_transforms_found:
                         self.enemies_after = len(self.detected_enemies)
                         self.state = State.MOVE_TO_HOME_START
-                        # TODO: change - self.enemies_before is currently hard coded to 0 in the init
-                        self.dead_enemy_count+= self.enemies_before - self.enemies_after
+                        
+                        self.dead_enemy_count += self.enemies_before - self.enemies_after
 
 
-        if self.dead_enemy_count:
-            self.dead_count_pub.publish(self.dead_enemy_count)
+        self.dead_count_pub.publish(self.dead_enemy_count)
 
 
 
