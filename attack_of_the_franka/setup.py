@@ -12,6 +12,7 @@ setup(
         ('share/' + package_name, [
             'package.xml',
             'launch/realsense.launch.py',
+            'launch/robot.launch.py',
             'config/apriltag.yaml',
             'config/apriltag.rviz',
             'config/parameters.yaml',
