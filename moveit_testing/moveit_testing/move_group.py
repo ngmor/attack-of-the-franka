@@ -290,9 +290,9 @@ class MoveGroup(Node):
         self.num_moves_completed = 0
         self.is_stab_motion = False
 
-        self.block_height = 0.1
-        self.block_width = 0.05
-        self.block_length = 0.03
+        self.block_height = 0.23
+        self.block_width = 0.11
+        self.block_length = 0.08
         self.sign = 1
         self.dead_count_pub = self.create_publisher(Int16, 'enemy_dead_count', 10)
         self.dead_enemy_count = None
@@ -482,6 +482,10 @@ class MoveGroup(Node):
                         self.get_logger().info("adding waypoints")
                         self.waypoint_movements.append([self.goal_waypoint, self.knock_enemy_waypoint])
 
+                        ####################
+                        # Testing check for if ally would be hit by falling enemy block
+                        ####################
+                        self.check_ally_danger_fall(self.detected_enemies[i], 0)
 
                     self.state = State.DYNAMIC_MOTION
 
@@ -1655,6 +1659,11 @@ class MoveGroup(Node):
                 # Try to get the transform for the detected object
                 try:
                     obj_data.tf = self.tf_buffer.lookup_transform(FRAMES.PANDA_BASE, obj_data.obj.name, rclpy.time.Time())
+                    # x_pos = obj_data.tf.transform.translation.x
+                    # y_pos = obj_data.tf.transform.translation.y
+                    # height = obj_data.tf.transform.translation.z
+                    # self.get_logger().info(f'detected ally position: ({x_pos}, {y_pos}, {height})')
+
                 except TransformException:
                     all_transforms_found = False
 
@@ -1675,6 +1684,11 @@ class MoveGroup(Node):
                 # Try to get the transform for the detected object
                 try:
                     obj_data.tf = self.tf_buffer.lookup_transform(FRAMES.PANDA_BASE, obj_data.obj.name, rclpy.time.Time())
+                    # x_pos = obj_data.tf.transform.translation.x
+                    # y_pos = obj_data.tf.transform.translation.y
+                    # height = obj_data.tf.transform.translation.z
+                    # self.get_logger().info(f'detected enemy position: ({x_pos}, {y_pos}, {height})')
+
                 except TransformException:
                     all_transforms_found = False
 
@@ -1692,18 +1706,29 @@ class MoveGroup(Node):
             enemy_to_ally = self.tf_buffer.lookup_transform(ally.obj.name, enemy_obj.obj.name, rclpy.time.Time())
             dist_y = enemy_to_ally.transform.translation.y
             dist_x = enemy_to_ally.transform.translation.x
+            self.get_logger().info(f'x,y distance to enemy: ({dist_x}, {dist_y})')
             if swing_style == 0:
                 # swinging so the brick falls to the left from desk view
-                if ((dist_y+0.5*self.block_width) < self.block_height) and ((dist_x+0.5*self.block_width) < self.block_width):
+                self.get_logger().info(f'dist_y factor {abs(dist_y-0.5*self.block_width)}, {self.block_width*1.5}')
+                self.get_logger().info(f'dist_x factor {(dist_x-0.5*self.block_width)}, {self.block_height+self.block_width*0.5}')
+                if (abs(dist_y-0.5*self.block_width) < self.block_width*1.5) and ((dist_x-0.5*self.block_width) < (self.block_height+self.block_width*0.5)):
+                    self.get_logger().info(f'not safe to attack in left swing')
                     return False
             if swing_style == 1:
                 # swinging so the brick falls to the right
-                if ((dist_y+0.5*self.block_width) < -self.block_height) and ((dist_x+0.5*self.block_width) < -self.block_width):
+                self.get_logger().info(f'dist_y factor {abs(dist_y-0.5*self.block_width)}, {self.block_width*1.5}')
+                self.get_logger().info(f'dist_x factor {(dist_x+0.5*self.block_width)}, {self.block_height+self.block_width*0.5}')
+                if (abs(dist_y-0.5*self.block_width) < self.block_height*1.5) and ((dist_x+0.5*self.block_width) < -(self.block_height+self.block_width*0.5)):
+                    self.get_logger().info(f'not safe to attack in right swing')
                     return False
             if swing_style == 2:
                 # swinging so the brick falls straight backwards
-                if ((dist_x+0.5*self.block_width) < self.block_height) and ((dist_y+0.5*self.block_width) < self.block_width):
+                self.get_logger().info(f'dist_y factor {(dist_y-0.5*self.block_width)}, {(self.block_height+self.block_width*0.5)}')
+                self.get_logger().info(f'dist_x factor {abs(dist_x-0.5*self.block_width)}, {self.block_width}')
+                if (abs(dist_x-0.5*self.block_width) < self.block_width) and ((dist_y-0.5*self.block_width) < (self.block_height+self.block_width*0.5)):
+                    self.get_logger().info(f'safe to attack in stabbing style')
                     return False
+            self.get_logger().info(f'safe to attack in style {swing_style}')
         return True
 
 def movegroup_entry(args=None):
