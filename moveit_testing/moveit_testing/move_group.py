@@ -1694,7 +1694,7 @@ class MoveGroup(Node):
 
                 # Append object data to array
                 self.detected_enemies.append(obj_data)
-        
+
         # Indicate if all transforms were found
         return all_transforms_found
 
@@ -1711,24 +1711,26 @@ class MoveGroup(Node):
                 # swinging so the brick falls to the left from desk view
                 self.get_logger().info(f'dist_y factor {abs(dist_y-0.5*self.block_width)}, {self.block_width*1.5}')
                 self.get_logger().info(f'dist_x factor {(dist_x-0.5*self.block_width)}, {self.block_height+self.block_width*0.5}')
-                if (abs(dist_y-0.5*self.block_width) < self.block_width*1.5) and ((dist_x-0.5*self.block_width) < (self.block_height+self.block_width*0.5)):
+                if (abs(dist_y-0.5*self.block_width) < self.block_width*1.5) and (dist_x>=0) and ((dist_x-0.5*self.block_width) < (self.block_height+self.block_width*0.5)):
                     self.get_logger().info(f'not safe to attack in left swing')
-                    return False
+                    # return False
+                swing_style = 1
             if swing_style == 1:
                 # swinging so the brick falls to the right
                 self.get_logger().info(f'dist_y factor {abs(dist_y-0.5*self.block_width)}, {self.block_width*1.5}')
-                self.get_logger().info(f'dist_x factor {(dist_x+0.5*self.block_width)}, {self.block_height+self.block_width*0.5}')
-                if (abs(dist_y-0.5*self.block_width) < self.block_height*1.5) and ((dist_x+0.5*self.block_width) < -(self.block_height+self.block_width*0.5)):
+                self.get_logger().info(f'dist_x factor {(dist_x+0.5*self.block_width)}, {-(self.block_height+self.block_width*0.5)}')
+                if (abs(dist_y-0.5*self.block_width) < self.block_width*1.5) and (dist_x <= 0) and ((dist_x+0.5*self.block_width) > -(self.block_height+self.block_width*0.5)):
                     self.get_logger().info(f'not safe to attack in right swing')
-                    return False
+                    # return False
+                swing_style = 2
             if swing_style == 2:
                 # swinging so the brick falls straight backwards
                 self.get_logger().info(f'dist_y factor {(dist_y-0.5*self.block_width)}, {(self.block_height+self.block_width*0.5)}')
                 self.get_logger().info(f'dist_x factor {abs(dist_x-0.5*self.block_width)}, {self.block_width}')
                 if (abs(dist_x-0.5*self.block_width) < self.block_width) and ((dist_y-0.5*self.block_width) < (self.block_height+self.block_width*0.5)):
-                    self.get_logger().info(f'safe to attack in stabbing style')
-                    return False
-            self.get_logger().info(f'safe to attack in style {swing_style}')
+                    self.get_logger().info(f'not safe to attack in stabbing style')
+                    # return False
+            # self.get_logger().info(f'safe to attack in style {swing_style}')
         return True
 
 def movegroup_entry(args=None):
