@@ -197,16 +197,35 @@ class RobotControl(Node):
         self.declare_parameter("back_wall.height", 0.46,
                                ParameterDescriptor(description="Back wall height from floor"))
         self.back_wall_height = self.get_parameter("back_wall.height").get_parameter_value().double_value
+        self.declare_parameter("lightsaber.diameter", 0.033,
+                               ParameterDescriptor(description="Lightsaber diameter"))
+        self.lightsaber_diameter = self.get_parameter("lightsaber.diameter").get_parameter_value().double_value
         self.declare_parameter("lightsaber.full_length", 1.122,
                                ParameterDescriptor(description="Lightsaber full length"))
         self.lightsaber_full_length = self.get_parameter("lightsaber.full_length").get_parameter_value().double_value
         self.declare_parameter("lightsaber.grip_offset", 0.15,
                                ParameterDescriptor(description="Lightsaber grip offset"))
         self.lightsaber_grip_offset = self.get_parameter("lightsaber.grip_offset").get_parameter_value().double_value
-        self.declare_parameter("lightsaber.gripper_height", 0.08,
-                               ParameterDescriptor(description="Lightsaber gripper height"))
-        self.lightsaber_gripper_height = self.get_parameter("lightsaber.gripper_height").get_parameter_value().double_value
-        self.table_offset = 0.091
+        self.declare_parameter("lightsaber.start_location.x", 0.,
+                               ParameterDescriptor(description="Lightsaber initial location x"))
+        self.declare_parameter("lightsaber.start_location.y", 0.,
+                               ParameterDescriptor(description="Lightsaber initial location y"))
+        self.declare_parameter("lightsaber.start_location.z", 0.,
+                               ParameterDescriptor(description="Lightsaber initial location z"))
+        self.lightsaber_start_location = geometry_msgs.msg.Point()
+        self.lightsaber_start_location.x = self.get_parameter("lightsaber.start_location.x").get_parameter_value().double_value
+        self.lightsaber_start_location.y = self.get_parameter("lightsaber.start_location.y").get_parameter_value().double_value
+        self.lightsaber_start_location.z = self.get_parameter("lightsaber.start_location.z").get_parameter_value().double_value
+        self.declare_parameter("lightsaber.lift_height", 0.5,
+                               ParameterDescriptor(description="Height to lift lightsaber out of its sheath"))
+        self.lightsaber_lift_height = self.get_parameter("lightsaber.lift_height").get_parameter_value().double_value
+        self.declare_parameter("gripper_height", 0.08,
+                               ParameterDescriptor(description="height of Franka attached gripper to avoid collisions"))
+        self.gripper_height = self.get_parameter("gripper_height").get_parameter_value().double_value
+        
+        
+        self.table_offset = 0.091 # TODO - fix hardcoding?
+
         # Initialize API class
         self.config = MoveConfig()
         self.config.base_frame_id = 'panda_link0'
@@ -349,12 +368,29 @@ class RobotControl(Node):
         grip_msg.command.max_effort = 60.0
         if self.pickup_action_client.server_is_ready():
             self.pickup_action_client.send_goal_async(grip_msg)
+        else:
+            return None
     
     def open_gripper(self):
         grip_msg = control_msgs.action.GripperCommand.Goal()
         grip_msg.command.position = 0.03    #0.04
         if self.pickup_action_client.server_is_ready():
-            self.pickup_action_client.send_goal_async(grip_msg)
+            return self.pickup_action_client.send_goal_async(grip_msg)
+        else:
+            return None
+
+    def grasp(self):
+        if self.grip_lightsaber_client.server_is_ready():
+            grip_goal = franka_msgs.action.Grasp.Goal()
+            grip_goal.width = 0.00 #0.033
+            grip_goal.epsilon.inner = 0.005
+            grip_goal.epsilon.outer = 0.005
+            grip_goal.speed = 0.03
+            grip_goal.force = 80.0
+            return self.grip_lightsaber_client.send_goal_async(grip_goal)
+        else:
+            return None
+        
 
     def find_allies(self):
         all_transforms_found = self.update_detected_objects(ObjectType.ALLY)
@@ -442,7 +478,7 @@ class RobotControl(Node):
                 self.table_center_y = (table1.transform.translation.y + table2.transform.translation.y)/2
 
                 self.add_walls()
-                self.add_lightsaber()
+                self.add_attached_lightsaber()
                 self.obstacles_added = 1
                 self.state = State.LOOK_FOR_ENEMY
 
@@ -798,17 +834,54 @@ class RobotControl(Node):
                         self.dead_enemy_count += self.enemies_before - self.enemies_after
 
 
-        self.dead_count_pub.publish(self.dead_enemy_count)
+        self.dead_count_pub.publish(Int16(data=self.dead_enemy_count))
 
     def pickup_lightsaber_sequence(self):
         """TODO"""
 
         done = False
 
-        if self.pickup_lightsaber_state != self.pickup_lightsaber_state_last:
-            self.get_logger().debug(f"Pickup lightsaber sequence changed to {self.pickup_lightsaber_state.name}")
+        new_state = self.pickup_lightsaber_state != self.pickup_lightsaber_state_last
+
+        if new_state:
+            self.get_logger().info(f"Pickup lightsaber sequence changed to {self.pickup_lightsaber_state.name}")
             self.pickup_lightsaber_state_last = self.pickup_lightsaber_state
 
+        if self.pickup_lightsaber_state == PickupLightsaberState.ADD_COLLISION:
+            self.add_separate_lightsaber()
+            self.pickup_lightsaber_state = PickupLightsaberState.MOVE_TO_HOME_START
+            self.test_count = 0 # TODO remove
+        elif self.pickup_lightsaber_state == PickupLightsaberState.MOVE_TO_HOME_START:
+            # TODO - remove
+            self.test_count += 1
+
+            if self.test_count > 200:
+                self.remove_separate_lightsaber()
+                done = True
+        elif self.pickup_lightsaber_state == PickupLightsaberState.MOVE_TO_HOME_WAIT:
+            pass
+        elif self.pickup_lightsaber_state == PickupLightsaberState.OPEN_START:
+            pass
+        elif self.pickup_lightsaber_state == PickupLightsaberState.OPEN_WAIT:
+            pass
+        elif self.pickup_lightsaber_state == PickupLightsaberState.MOVE_TO_LIGHTSABER_START:
+            pass
+        elif self.pickup_lightsaber_state == PickupLightsaberState.MOVE_TO_LIGHTSABER_WAIT:
+            pass
+        elif self.pickup_lightsaber_state == PickupLightsaberState.GRASP_START:
+            pass
+        elif self.pickup_lightsaber_state == PickupLightsaberState.GRASP_WAIT:
+            pass
+        elif self.pickup_lightsaber_state == PickupLightsaberState.SWITCH_TO_ATTACHED_COLLISION:
+            pass
+        elif self.pickup_lightsaber_state == PickupLightsaberState.LIFT_START:
+            pass
+        elif self.pickup_lightsaber_state == PickupLightsaberState.LIFT_WAIT:
+            pass
+        elif self.pickup_lightsaber_state == PickupLightsaberState.RETURN_TO_HOME_START:
+            pass
+        elif self.pickup_lightsaber_state == PickupLightsaberState.RETURN_TO_HOME_WAIT:
+            pass
 
         return done
 
@@ -865,16 +938,8 @@ class RobotControl(Node):
 
     def gripper_grasp_callback(self, request, response):
         #Note: might need to command robot to stay up when holding lightsaber
-        self.grip_lightsaber_client.wait_for_server()
-        if self.grip_lightsaber_client.server_is_ready():
-            grip_goal = franka_msgs.action.Grasp.Goal()
-            grip_goal.width = 0.00 #0.033
-            grip_goal.epsilon.inner = 0.005
-            grip_goal.epsilon.outer = 0.005
-            grip_goal.speed = 0.03
-            grip_goal.force = 80.0
-            self.grip_lightsaber_client.send_goal_async(grip_goal)
-        return response
+        self.grip_lightsaber_client.wait_for_server() # TODO - remove?
+        self.grasp()
 
 
     # def grip_lightsaber_callback(self, request, response):
@@ -1337,11 +1402,42 @@ class RobotControl(Node):
 
         obstacle.header.frame_id = self.moveit.config.base_frame_id
 
-        self.moveit.update_persistent_obstacle(obstacle, delete=request.delete_obstacle)
+        self.moveit.update_obstacles([obstacle], delete=request.delete_obstacle)
 
         return response
 
-    def add_lightsaber(self):
+    def add_separate_lightsaber(self):
+        """Add lightsaber as a separate collision object."""
+
+        obstacle = moveit_msgs.msg.CollisionObject()
+        obstacle.id = 'lightsaber'
+
+        pose = geometry_msgs.msg.Pose()
+        pose.position = self.lightsaber_start_location
+        pose.orientation.y = -1.0
+
+        obstacle.primitive_poses = [pose]
+
+        shape = shape_msgs.msg.SolidPrimitive()
+        shape.type = 3  # Cylinder
+        shape.dimensions = [self.lightsaber_full_length, self.lightsaber_diameter, 0.2]
+        obstacle.primitives = [shape]
+
+        obstacle.header.frame_id = self.moveit.config.base_frame_id
+
+        self.moveit.update_obstacles([obstacle], delete=False)
+
+    def remove_separate_lightsaber(self):
+        """Remove lightsaber as a separate collision object."""
+
+        obstacle = moveit_msgs.msg.CollisionObject()
+        obstacle.id = 'lightsaber'
+
+        self.moveit.update_obstacles([obstacle], delete=True)
+
+
+    def add_attached_lightsaber(self):
+        """Add lightsaber as an attached collision object."""
         attached_obstacle = moveit_msgs.msg.AttachedCollisionObject()
         attached_obstacle.link_name = 'panda_hand_tcp'
         attached_obstacle.object.header.frame_id = 'panda_hand_tcp'
@@ -1357,7 +1453,7 @@ class RobotControl(Node):
 
         shape = shape_msgs.msg.SolidPrimitive()
         shape.type = 3  # Cylinder
-        shape.dimensions = [1.125, 0.033, 0.2]
+        shape.dimensions = [self.lightsaber_full_length, self.lightsaber_diameter, 0.2]
         attached_obstacle.object.primitives = [shape]
 
         attached_obstacle.object.operation = attached_obstacle.object.ADD
@@ -1424,7 +1520,6 @@ class RobotControl(Node):
         obstacle.primitives = [shape]
 
         obstacle.header.frame_id = self.moveit.config.base_frame_id
-        # self.moveit.update_persistent_obstacle(obstacle, delete=False)
 
         obstacle1 = moveit_msgs.msg.CollisionObject()
         obstacle1.id = 'wall_1'
@@ -1514,17 +1609,17 @@ class RobotControl(Node):
         pose6 = geometry_msgs.msg.Pose()
         pose6.position.x = 0.355
         pose6.position.y = 0.0
-        pose6.position.z = self.lightsaber_gripper_height/2
+        pose6.position.z = self.gripper_height/2
         obstacle6.primitive_poses = [pose6]
 
         shape6 = shape_msgs.msg.SolidPrimitive()
         shape6.type = 1  # Box
-        shape6.dimensions = [0.35, self.robot_table_width, self.lightsaber_gripper_height]
+        shape6.dimensions = [0.35, self.robot_table_width, self.gripper_height]
         obstacle6.primitives = [shape6]
 
         obstacle6.header.frame_id = self.moveit.config.base_frame_id
 
-        self.moveit.update_persistent_obstacle([obstacle, obstacle1, obstacle2, obstacle3, obstacle4, obstacle5, obstacle6], delete=False)
+        self.moveit.update_obstacles([obstacle, obstacle1, obstacle2, obstacle3, obstacle4, obstacle5, obstacle6], delete=False)
 
         
         #arm table should be attached collision object
@@ -1555,145 +1650,7 @@ class RobotControl(Node):
 
     def add_walls_callback(self, request, response):
 
-        obstacle = moveit_msgs.msg.CollisionObject()
-        obstacle.id = 'wall_0'
-
-        pose = geometry_msgs.msg.Pose()
-        pose.position.x = 0.25
-        pose.position.y = self.side_wall_distance
-        pose.position.z = 0.0
-        obstacle.primitive_poses = [pose]
-
-        shape = shape_msgs.msg.SolidPrimitive()
-        shape.type = 1  # Box
-        shape.dimensions = [3.0, 0.25, self.side_wall_height]
-        obstacle.primitives = [shape]
-
-        obstacle.header.frame_id = self.moveit.config.base_frame_id
-        # self.moveit.update_persistent_obstacle(obstacle, delete=False)
-
-        obstacle1 = moveit_msgs.msg.CollisionObject()
-        obstacle1.id = 'wall_1'
-
-        pose1 = geometry_msgs.msg.Pose()
-        pose1.position.x = 0.25
-        pose1.position.y = -self.side_wall_distance
-        pose1.position.z = 0.0
-        obstacle1.primitive_poses = [pose1]
-
-        shape1 = shape_msgs.msg.SolidPrimitive()
-        shape1.type = 1  # Box
-        shape1.dimensions = [3.0, 0.25, self.side_wall_height]
-        obstacle1.primitives = [shape1]
-
-        obstacle1.header.frame_id = self.moveit.config.base_frame_id
-
-        obstacle2 = moveit_msgs.msg.CollisionObject()
-        obstacle2.id = 'floor'
-
-        pose2 = geometry_msgs.msg.Pose()
-        pose2.position.x = 0.0
-        pose2.position.y = 0.0
-        pose2.position.z = -(self.robot_table_height)
-        obstacle2.primitive_poses = [pose2]
-
-        shape2 = shape_msgs.msg.SolidPrimitive()
-        shape2.type = 1  # Box
-        shape2.dimensions = [4.0, 2.0, 0.02]
-        obstacle2.primitives = [shape2]
-
-        obstacle2.header.frame_id = self.moveit.config.base_frame_id
-
-        obstacle3 = moveit_msgs.msg.CollisionObject()
-        obstacle3.id = 'blocks_table'
-
-        pose3 = geometry_msgs.msg.Pose()
-        pose3.position.x = self.table_center_x 
-        pose3.position.y = self.table_center_y 
-        pose3.position.z = -0.091
-        obstacle3.primitive_poses = [pose3]
-
-        shape3 = shape_msgs.msg.SolidPrimitive()
-        shape3.type = 1  # Box
-        shape3.dimensions = [self.table_len_x, self.table_len_y, 0.023]
-        obstacle3.primitives = [shape3]
-
-        obstacle3.header.frame_id = self.moveit.config.base_frame_id
-
-        obstacle4 = moveit_msgs.msg.CollisionObject()
-        obstacle4.id = 'back_wall'
-
-        pose4 = geometry_msgs.msg.Pose()
-        pose4.position.x = -self.back_wall_distance
-        pose4.position.y = 0.0
-        pose4.position.z = -self.robot_table_height + (self.back_wall_height/2)
-        obstacle4.primitive_poses = [pose4]
-
-        shape4 = shape_msgs.msg.SolidPrimitive()
-        shape4.type = 1  # Box
-        shape4.dimensions = [0.3, 4.0, self.back_wall_height]
-        obstacle4.primitives = [shape4]
-
-        obstacle4.header.frame_id = self.moveit.config.base_frame_id
-
-        obstacle5 = moveit_msgs.msg.CollisionObject()
-        obstacle5.id = 'ceiling'
-
-        pose5 = geometry_msgs.msg.Pose()
-        pose5.position.x = 0.0
-        pose5.position.y = 0.0
-        pose5.position.z = self.ceiling_height
-        obstacle5.primitive_poses = [pose5]
-
-        shape5 = shape_msgs.msg.SolidPrimitive()
-        shape5.type = 1  # Box
-        shape5.dimensions = [4.0, 2.0, 0.02]
-        obstacle5.primitives = [shape5]
-
-        obstacle5.header.frame_id = self.moveit.config.base_frame_id
-
-        obstacle6 = moveit_msgs.msg.CollisionObject()
-        obstacle6.id = 'gripper_height_offset'
-
-        pose6 = geometry_msgs.msg.Pose()
-        pose6.position.x = 0.0
-        pose6.position.y = 0.0355
-        pose6.position.z = self.lightsaber_gripper_height
-        obstacle6.primitive_poses = [pose6]
-
-        shape6 = shape_msgs.msg.SolidPrimitive()
-        shape6.type = 1  # Box
-        shape6.dimensions = [self.robot_table_length, 0.04, self.robot_table_height]
-        obstacle6.primitives = [shape6]
-
-        obstacle6.header.frame_id = self.moveit.config.base_frame_id
-
-        self.moveit.update_persistent_obstacle([obstacle, obstacle1, obstacle2, obstacle3, obstacle4, obstacle5, obstacle6], delete=False)
-
-        
-        #arm table should be attached collision object
-        attached_obstacle = moveit_msgs.msg.AttachedCollisionObject()
-        attached_obstacle.link_name = 'panda_link0'
-        attached_obstacle.object.header.frame_id = 'panda_link0'
-        attached_obstacle.object.header.stamp = self.get_clock().now().to_msg()
-        attached_obstacle.object.id = 'arm_table'
-
-        pose2 = geometry_msgs.msg.Pose()
-        pose2.position.x = 0.0
-        pose2.position.y = 0.0
-        pose2.position.z = -(self.robot_table_height/2)
-        attached_obstacle.object.primitive_poses = [pose2]
-
-        shape2 = shape_msgs.msg.SolidPrimitive()
-        shape2.type = 1  # Box
-        shape2.dimensions = [self.robot_table_length, self.robot_table_width, self.robot_table_height]
-        attached_obstacle.object.primitives = [shape2]
-
-        attached_obstacle.object.operation = attached_obstacle.object.ADD
-
-        attached_obstacle.touch_links = ['panda_link0', 'panda_link1']
-
-        self.moveit.update_attached_obstacles(attached_obstacle, delete=False)
+        self.add_walls()
 
         return response
 

@@ -17,9 +17,15 @@
       distance: 0.75 # m
       height: 0.46 # m
     lightsaber:
+      diameter: 0.033 # m
       full_length: 1.122 # m
       grip_offset: 0.15 # m
-      gripper_height: 0.08 #m
+      start_location:
+        x: 0. # m
+        y: 0. # m
+        z: 0. # m
+      lift_height: 0.5 # m
+    gripper_height: 0.08 # m, height of Franka attached gripper to avoid collisions
     depth_filter:
       min_offset: 0.075 # m
       max_offset: 0.5 # m

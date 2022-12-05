@@ -223,7 +223,6 @@ class MoveIt():
         self._tf_listener = TransformListener(self._tf_buffer, self._node)
         self._ik_start_sec = 0
 
-        self._persistent_obstacles = []
         self._attached_obstacles = []
         self._obs_list = []
 
@@ -412,21 +411,6 @@ class MoveIt():
                     moveit_msgs.srv.GetPlanningScene.Request())
             if self.obstacle_future.done():
                 self._planning_scene = copy.deepcopy(self.obstacle_future.result().scene)
-                if self._attached_obstacles:
-                    # self._node.get_logger().info(
-                    # f"Attached obstacles message {self._planning_scene.robot_state}")
-                    # self._node.get_logger().info(
-                    # f"Length of attached obstacles message {len(self._planning_scene.robot_state.attached_collision_objects)}")
-                    # self._node.get_logger().info(
-                    # f"First element of attached obstacles message {self._planning_scene.robot_state.attached_collision_objects[0]}")
-                    # self._node.get_logger().info(
-                    # f"Second element of attached obstacles message {self._planning_scene.robot_state.attached_collision_objects[1]}")
-                    # add to planning scene's attached collision object list
-                    self._planning_scene.robot_state.attached_collision_objects = self._attached_obstacles
-                    # attached_obstacle = moveit_msgs.msg.CollisionObject()
-                    # attached_obstacle = self._attached_obstacles
-                    # self._planning_scene.world.collision_objects.append(attached_obstacle)
-                    self._planning_scene.is_diff = True
                 # process info
                 self._update_collision_object()
                 self._obs_state = _ObstacleState.PUBLISH
@@ -955,6 +939,10 @@ class MoveIt():
             none
 
         """
+        if self._attached_obstacles:
+            # add to planning scene's attached collision object list
+            self._planning_scene.robot_state.attached_collision_objects = self._attached_obstacles
+
         if not self._delete_obs:
             _obstacle_ID_list = []
             for obstacle in self._planning_scene.world.collision_objects:
@@ -969,16 +957,12 @@ class MoveIt():
                     # object isn't in list, do whatever you need  to
                     # ADD
                     self._planning_scene.world.collision_objects.append(copy.deepcopy(obstacle))
-                    if self._attached_obstacles:
-                        # add to planning scene's attached collision object list
-                        self._planning_scene.robot_state.attached_collision_objects = self._attached_obstacles
+                    
                 else:
                     # object is in list
                     # UPDATE
                     self._planning_scene.world.collision_objects[index] = copy.deepcopy(obstacle)
-                    if self._attached_obstacles:
-                        # add to planning scene's attached collision object list
-                        self._planning_scene.robot_state.attached_collision_objects = self._attached_obstacles
+
         else:
             for obstacle in self._obs_list:
                 for i in range(len(self._planning_scene.world.collision_objects)):
@@ -1004,11 +988,7 @@ class MoveIt():
             # TODO - return some form of error, we are busy
             return
         self._obs_state = _ObstacleState.WAIT_FOR_READY
-        # if self._persistent_obstacle is not empty, append to obstacle_list
-        if self._persistent_obstacles:
-            #obstacle_list.extend(self._persistent_obstacles)
-            obstacle_list.extend(self._persistent_obstacles)
-        self._obs_list = obstacle_list
+        self._obs_list = copy.deepcopy(obstacle_list)
         self._delete_obs = delete
         # TODO - return some sort of message indicating success or failure
         return
@@ -1025,66 +1005,15 @@ class MoveIt():
             none
         """
         if delete:
-            for i in range(len(self._persistent_obstacles)):
+            # TODO - fix
+            for i in range(len(self._attached_obstacles)):
                 if attached_object.object.id == self._attached_obstacles[i].object.id:
                     self._attached_obstacles.pop(i)
         else:
-            # add object to persistent obstacle list
-            #self._persistent_obstacles.append(attached_object.object)
+            # add object to attached obstacle list
             self._attached_obstacles.append(attached_object)
-            # add to planning scene's attached collision object list
-            # self._planning_scene.robot_state.attached_collision_objects.append(attached_object)
-        self.update_obstacles(self._obs_list, False)
-        return
-
-    # def update_persistent_obstacle(self, obstacle, delete=False):
-    #     """
-    #     Add an obstacle to the scene that doesn't exist physically
-
-    #     Args:
-    #         obstacle: object of type moveit_msgs.msg.CollisionObject()
-    #                   to add to the Planning Scene
-    #     Returns
-    #     -------
-    #         none
-    #     """
-    #     if delete:
-    #         for i in range(len(self._persistent_obstacles)):
-    #             if obstacle.id == self._persistent_obstacles[i].id:
-    #                 self._persistent_obstacles.pop(i)
-    #                 break
-    #     else:
-    #         # add object to persistent obstacle list
-    #         if self._persistent_obstacles:
-    #             self._persistent_obstacles.append(obstacle)
-    #         else:
-    #             self._persistent_obstacles = obstacle
-    #     self.update_obstacles(self._obs_list, False)
-    #     return
-
-    def update_persistent_obstacle(self, obstacle, delete=False):
-        """
-        Add an obstacle to the scene that doesn't exist physically
-
-        Args:
-            obstacle: object of type moveit_msgs.msg.CollisionObject()
-                      to add to the Planning Scene
-        Returns
-        -------
-            none
-        """
-        if delete:
-            for i in range(len(self._persistent_obstacles)):
-                if obstacle.id == self._persistent_obstacles[i].id:
-                    self._persistent_obstacles.pop(i)
-                    break
-        else:
-            # add object to persistent obstacle list
-            if self._persistent_obstacles:
-                self._persistent_obstacles.append(obstacle)
-            else:
-                self._persistent_obstacles = obstacle
-        self.update_obstacles(self._obs_list, False)
+            
+        self.update_obstacles([], False)
         return
 
     def get_last_error(self):
