@@ -186,8 +186,11 @@ class ContourData():
         if self.coord is None:
             return False
         else:
-            return ((self.coord.x >= limits.lower) and 
-                    (self.coord.x <= limits.upper))
+            if self.coord.x == 0: # invalid depth
+                return False
+            else:
+                return ((self.coord.x >= limits.lower) and 
+                        (self.coord.x <= limits.upper))
 
     def get_frame_name(self, number):
         """Get the frame name of the object by inputting which number it is."""
@@ -276,6 +279,12 @@ class CameraProcessor(Node):
         self.declare_parameter("enable_work_area_sliders", False,
                                ParameterDescriptor(description="Enable work area bounds by sliders"))
         self.enable_work_area_sliders = self.get_parameter("enable_work_area_sliders").get_parameter_value().bool_value
+        self.declare_parameter("enable_depth_filter", True,
+                               ParameterDescriptor(description="Activate depth filter"))
+        self.enable_depth_filter = self.get_parameter("enable_depth_filter").get_parameter_value().bool_value
+        self.declare_parameter("enable_depth_filter_sliders", False,
+                               ParameterDescriptor(description="Enable depth filter sliders"))
+        self.enable_depth_filter_sliders = self.get_parameter("enable_depth_filter_sliders").get_parameter_value().bool_value
         self.declare_parameter("enable_work_area_apriltags", True,
                                ParameterDescriptor(description="Enable work area bounds by AprilTags"))
         self.enable_work_area_apriltags = self.get_parameter("enable_work_area_apriltags").get_parameter_value().bool_value
@@ -305,12 +314,6 @@ class CameraProcessor(Node):
         self.declare_parameter("robot_table.x_tag_edge_to_table_edge", 0.023,
                                ParameterDescriptor(description="X edge of AprilTag to edge of robot table"))
         self.robot_table_x_tag_edge_to_table_edge = self.get_parameter("robot_table.x_tag_edge_to_table_edge").get_parameter_value().double_value
-        self.declare_parameter("depth_filter.min_offset", 0.0,
-                               ParameterDescriptor(description="Depth filter minimum offset"))
-        self.depth_filter_min = self.get_parameter("depth_filter.min_offset").get_parameter_value().double_value
-        self.declare_parameter("depth_filter.max_offset", 0.5,
-                               ParameterDescriptor(description="Depth filter maximum offset"))
-        self.depth_filter_max = self.get_parameter("depth_filter.max_offset").get_parameter_value().double_value
 
         # sliders get precedence over AprilTags
         if self.enable_work_area_sliders and self.enable_work_area_apriltags:
@@ -331,6 +334,9 @@ class CameraProcessor(Node):
         if self.enable_enemy_sliders:
             cv2.namedWindow(self.enemy_mask_window_name, cv2.WINDOW_NORMAL)
 
+        self.ally_hsv = HSVLimits('Ally',self.ally_mask_window_name,[100,57,120],[142,255,255],self.enable_ally_sliders)
+        self.enemy_hsv = HSVLimits('Enemy',self.enemy_mask_window_name,[20,81,167],[160,255,255],self.enable_enemy_sliders)
+
         self.filter_kernel = 5
         self.area_threshold = 1250
 
@@ -341,11 +347,10 @@ class CameraProcessor(Node):
         self.x_limits = TrackbarLimits('X',self.color_window_name,[558,808],[0,1280],self.enable_work_area_sliders)
         self.y_limits = TrackbarLimits('Y',self.color_window_name,[261,642],[0,720],self.enable_work_area_sliders)
 
+        self.depth_limits = TrackbarLimits('Depth', self.color_window_name, [0, 1670], [0, 3000], self.enable_depth_filter_sliders)
+
         self.contours_filtered_ally = []
         self.contours_filtered_enemy = []
-
-        self.ally_hsv = HSVLimits('Ally',self.ally_mask_window_name,[100,57,120],[142,255,255],self.enable_ally_sliders)
-        self.enemy_hsv = HSVLimits('Enemy',self.enemy_mask_window_name,[20,81,167],[160,255,255],self.enable_enemy_sliders)
 
         self.static_broadcaster = StaticTransformBroadcaster(self)
         self.broadcaster = TransformBroadcaster(self)
@@ -460,9 +465,9 @@ class CameraProcessor(Node):
                             if not contour_data.coord_within_bounds(self.work_area_limits_y,self.work_area_limits_z):
                                 include_contour = False
 
-                            if self.depth_filter_min != self.depth_filter_max:
-                                if not contour_data.depth_within_bounds(self.work_area_limits_x):
-                                    include_contour = False
+                        if self.enable_depth_filter:
+                            if not contour_data.depth_within_bounds(self.get_depth_limits()):
+                                include_contour = False
 
                         if include_contour:
                             self.contours_filtered_ally.append(contour_data)
@@ -521,9 +526,9 @@ class CameraProcessor(Node):
                             if not contour_data.coord_within_bounds(self.work_area_limits_y,self.work_area_limits_z):
                                 include_contour = False
 
-                            if self.depth_filter_min != self.depth_filter_max:
-                                if not contour_data.depth_within_bounds(self.work_area_limits_x):
-                                    include_contour = False
+                        if self.enable_depth_filter:
+                            if not contour_data.depth_within_bounds(self.get_depth_limits()):
+                                include_contour = False
 
 
                         if include_contour:
@@ -774,12 +779,8 @@ class CameraProcessor(Node):
                 workspace1_transform.transform.translation.x,
                 workspace2_transform.transform.translation.x
             )
-            # Inverted minus sign and min/max due to direction of camera frame x axis
-            self.work_area_limits_x.lower = table_depth - self.depth_filter_max
-            self.work_area_limits_x.upper = table_depth - self.depth_filter_min
 
             # Get pixel coordinates to draw on picture
-            # TODO - turn into actual transforms and publish?
             self.tf_workspace_min = TransformStamped()
             self.tf_workspace_min.transform.translation.x = table_depth
             self.tf_workspace_min.transform.translation.y = self.work_area_limits_y.lower
@@ -856,6 +857,15 @@ class CameraProcessor(Node):
         self.update_calibration_continuously = True
 
         return response
+
+    def get_depth_limits(self):
+
+        # Convert from mm to m
+        limits = Limits()
+        limits.lower = self.depth_limits.value.lower / 1000.
+        limits.upper = self.depth_limits.value.upper / 1000.
+
+        return limits
 
 
 def entry(args=None):
