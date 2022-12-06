@@ -3,6 +3,7 @@ from rclpy.node import Node
 from cv_bridge import CvBridge, CvBridgeError
 import cv2
 import sensor_msgs.msg
+import std_srvs.srv
 import numpy as np
 import copy
 import std_msgs.msg
@@ -254,6 +255,8 @@ class CameraProcessor(Node):
         self.sub_color_camera_info = self.create_subscription(sensor_msgs.msg.CameraInfo,'/camera/color/camera_info',self.color_info_callback,10)
         self.sub_aligned_depth_image = self.create_subscription(sensor_msgs.msg.Image,'/camera/aligned_depth_to_color/image_raw',self.aligned_depth_image_callback,10)
         self.sub_enemy_dead_count = self.create_subscription(std_msgs.msg.Int16,'enemy_dead_count',self.enemy_deadcount_callback,10)
+        self.srv_start_apriltag_calibration = self.create_service(std_srvs.srv.Empty, 'start_apriltag_calibration', self.start_apriltag_calibration_callback)
+        self.srv_update_calibration_continuously = self.create_service(std_srvs.srv.Empty, 'update_calibration_continuously', self.update_calibration_continuously_callback)
 
         self.declare_parameter("enable_ally_sliders", False,
                                ParameterDescriptor(description="Enable Ally HSV sliders"))
@@ -832,6 +835,27 @@ class CameraProcessor(Node):
             return
     def enemy_deadcount_callback(self, msg):
         self.dead_enemies_count = msg
+
+    def start_apriltag_calibration_callback(self, request, response):
+
+        self.calibrating_robot_table = True
+        self.robot_table_calibration_array = []
+
+        self.calibrating_workspace1 = True
+        self.workspace1_calibration_array = []
+
+        self.calibrating_workspace2 = True
+        self.workspace2_calibration_array = []
+
+        self.update_calibration_continuously = False
+
+        return response
+
+    def update_calibration_continuously_callback(self, request, response):
+
+        self.update_calibration_continuously = True
+
+        return response
 
 
 def entry(args=None):
