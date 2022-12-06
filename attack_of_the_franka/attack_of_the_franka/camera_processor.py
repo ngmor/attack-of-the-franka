@@ -630,17 +630,14 @@ class CameraProcessor(Node):
             except Exception:
                 workspace2_detected = False
 
-        self.work_area_apriltags_detected = (
-            (self.tf_camera_to_workspace1_raw is not None) 
-            and (self.tf_camera_to_workspace2_raw is not None)
-        )
+        robot_table_transform = None
 
         # Broadcast last known transforms even if we lose AprilTags
         if self.tf_camera_to_robot_table_raw is not None:
 
             # If updating continuously, always send most recent available transform
             if self.update_calibration_continuously:
-                transform = copy.deepcopy(self.tf_camera_to_robot_table_raw)
+                robot_table_transform = copy.deepcopy(self.tf_camera_to_robot_table_raw)
 
             # Otherwise, send calibrated transform
             else:
@@ -663,20 +660,22 @@ class CameraProcessor(Node):
 
                 # if a calibration transform has been created, send it. Otherwise send latest transform
                 if self.tf_camera_to_robot_table_calibrated is not None:
-                    transform = copy.deepcopy(self.tf_camera_to_robot_table_calibrated)
+                    robot_table_transform = copy.deepcopy(self.tf_camera_to_robot_table_calibrated)
                 else:
-                    transform = copy.deepcopy(self.tf_camera_to_robot_table_raw)
+                    robot_table_transform = copy.deepcopy(self.tf_camera_to_robot_table_raw)
                         
-            transform.child_frame_id = FRAMES().PANDA_TABLE
-            transform.header.stamp = time
-            self.broadcaster.sendTransform(transform)
+            robot_table_transform.child_frame_id = FRAMES().PANDA_TABLE
+            robot_table_transform.header.stamp = time
+            self.broadcaster.sendTransform(robot_table_transform)
+
+        workspace1_transform = None
 
         # Broadcast last known transforms even if we lose AprilTags
         if self.tf_camera_to_workspace1_raw is not None:
 
             # If updating continuously, always send most recent available transform
             if self.update_calibration_continuously:
-                transform = copy.deepcopy(self.tf_camera_to_workspace1_raw)
+                workspace1_transform = copy.deepcopy(self.tf_camera_to_workspace1_raw)
 
             # Otherwise, send calibrated transform
             else:
@@ -699,20 +698,22 @@ class CameraProcessor(Node):
 
                 # if a calibration transform has been created, send it. Otherwise send latest transform
                 if self.tf_camera_to_workspace1_calibrated is not None:
-                    transform = copy.deepcopy(self.tf_camera_to_workspace1_calibrated)
+                    workspace1_transform = copy.deepcopy(self.tf_camera_to_workspace1_calibrated)
                 else:
-                    transform = copy.deepcopy(self.tf_camera_to_workspace1_raw)
+                    workspace1_transform = copy.deepcopy(self.tf_camera_to_workspace1_raw)
                         
-            transform.child_frame_id = FRAMES().WORK_TABLE1
-            transform.header.stamp = time
-            self.broadcaster.sendTransform(transform)
+            workspace1_transform.child_frame_id = FRAMES().WORK_TABLE1
+            workspace1_transform.header.stamp = time
+            self.broadcaster.sendTransform(workspace1_transform)
+
+        workspace2_transform = None
 
         # Broadcast last known transforms even if we lose AprilTags
         if self.tf_camera_to_workspace2_raw is not None:
 
             # If updating continuously, always send most recent available transform
             if self.update_calibration_continuously:
-                transform = copy.deepcopy(self.tf_camera_to_workspace2_raw)
+                workspace2_transform = copy.deepcopy(self.tf_camera_to_workspace2_raw)
 
             # Otherwise, send calibrated transform
             else:
@@ -735,36 +736,40 @@ class CameraProcessor(Node):
 
                 # if a calibration transform has been created, send it. Otherwise send latest transform
                 if self.tf_camera_to_workspace2_calibrated is not None:
-                    transform = copy.deepcopy(self.tf_camera_to_workspace2_calibrated)
+                    workspace2_transform = copy.deepcopy(self.tf_camera_to_workspace2_calibrated)
                 else:
-                    transform = copy.deepcopy(self.tf_camera_to_workspace2_raw)
+                    workspace2_transform = copy.deepcopy(self.tf_camera_to_workspace2_raw)
                         
-            transform.child_frame_id = FRAMES().WORK_TABLE2
-            transform.header.stamp = time
-            self.broadcaster.sendTransform(transform)
+            workspace2_transform.child_frame_id = FRAMES().WORK_TABLE2
+            workspace2_transform.header.stamp = time
+            self.broadcaster.sendTransform(workspace2_transform)
 
+        self.work_area_apriltags_detected = (
+            (workspace1_transform is not None) 
+            and (workspace2_transform is not None)
+        )
         
         if self.work_area_apriltags_detected:
             # Determine bounds from work area AprilTags
             self.work_area_limits_y.lower = min(
-                self.tf_camera_to_workspace1_raw.transform.translation.y,
-                self.tf_camera_to_workspace2_raw.transform.translation.y
+                workspace1_transform.transform.translation.y,
+                workspace2_transform.transform.translation.y
             ) - self.work_area_tag_size / 2.
             self.work_area_limits_y.upper = max(
-                self.tf_camera_to_workspace1_raw.transform.translation.y,
-                self.tf_camera_to_workspace2_raw.transform.translation.y
+                workspace1_transform.transform.translation.y,
+                workspace2_transform.transform.translation.y
             ) + self.work_area_tag_size / 2.
             self.work_area_limits_z.lower = min(
-                self.tf_camera_to_workspace1_raw.transform.translation.z,
-                self.tf_camera_to_workspace2_raw.transform.translation.z
+                workspace1_transform.transform.translation.z,
+                workspace2_transform.transform.translation.z
             ) - self.work_area_tag_size / 2.
             self.work_area_limits_z.upper = max(
-                self.tf_camera_to_workspace1_raw.transform.translation.z,
-                self.tf_camera_to_workspace2_raw.transform.translation.z
+                workspace1_transform.transform.translation.z,
+                workspace2_transform.transform.translation.z
             ) + self.work_area_tag_size / 2.
             table_depth = min(
-                self.tf_camera_to_workspace1_raw.transform.translation.x,
-                self.tf_camera_to_workspace2_raw.transform.translation.x
+                workspace1_transform.transform.translation.x,
+                workspace2_transform.transform.translation.x
             )
             # Inverted minus sign and min/max due to direction of camera frame x axis
             self.work_area_limits_x.lower = table_depth - self.depth_filter_max
