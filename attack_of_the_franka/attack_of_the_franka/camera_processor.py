@@ -82,6 +82,7 @@ class HSVLimits():
     
     # TODO Refactor to include several trackbar limits classes
     def __init__(self,name,window_name,lower_bounds,upper_bounds,use_trackbar=False):
+        """Create trackbars to help set higher and lower hsv values."""
         self.lower = HSV(lower_bounds[0],lower_bounds[1],lower_bounds[2])
         self.upper = HSV(upper_bounds[0],upper_bounds[1],upper_bounds[2])
         self.name = name
@@ -98,31 +99,37 @@ class HSVLimits():
             cv2.createTrackbar(self.upper_names.V, self.window_name,self.upper.V,255,self.trackbar_upper_V)
 
     def trackbar_lower_H(self,val):
+        """Set the lower H value."""
         self.lower.H = val
         self.lower.H = min(self.upper.H-1, self.lower.H)
         cv2.setTrackbarPos(self.lower_names.H,self.window_name,self.lower.H)
 
     def trackbar_upper_H(self,val):
+        """Set the upper H value."""
         self.upper.H = val
         self.upper.H = max(self.lower.H+1, self.upper.H)
         cv2.setTrackbarPos(self.upper_names.H,self.window_name,self.upper.H)
 
     def trackbar_lower_S(self,val):
+        """Set the lower S value."""        
         self.lower.S = val
         self.lower.S = min(self.upper.S-1, self.lower.S)
         cv2.setTrackbarPos(self.lower_names.S,self.window_name,self.lower.S)
 
     def trackbar_upper_S(self,val):
+        """Set the upper S value."""
         self.upper.S = val
         self.upper.S = max(self.lower.S+1, self.upper.S)
         cv2.setTrackbarPos(self.upper_names.S,self.window_name,self.upper.S)
 
     def trackbar_lower_V(self,val):
+        """Set the lower V value."""
         self.lower.V = val
         self.lower.V = min(self.upper.V-1, self.lower.V)
         cv2.setTrackbarPos(self.lower_names.V,self.window_name,self.lower.V)
 
     def trackbar_upper_V(self,val):
+        """Set the upper V value."""
         self.upper.V = val
         self.upper.V = max(self.lower.V+1, self.upper.V)
         cv2.setTrackbarPos(self.upper_names.V,self.window_name,self.upper.V)
@@ -228,7 +235,13 @@ class ContourData():
 
 
 class CameraProcessor(Node):
-    """TODO"""
+    """
+    Create mask to detect enemy and ally
+    Provide a sliderbar to set HSV values
+    Create trackbar for Area thresholding
+    Providing option to sort allies and enemies in x or y
+    Create height thresholding to detect in a certain height range only
+    """
 
     def __init__(self):
         """Class constructor."""
@@ -530,7 +543,12 @@ class CameraProcessor(Node):
         cv2.waitKey(1)
     
     def get_transforms(self):
-
+        """
+        Get transforms  between camera and panda table and broadcast them
+        Get transforms between camera and workspace diagonal ends and broadcast them. 
+        Calculate the workspace from the transforms and make a bounding box depicting it.
+        Fix frames to latest transform in case we stop receiving transforms from AprilTags
+        """
         time = self.get_clock().now().to_msg()
 
         # Get panda table transformations if possible
@@ -640,6 +658,7 @@ class CameraProcessor(Node):
         self.area_threshold = val
 
     def color_image_callback(self, data):
+        """Use cvbridge to use color_image from intel realsense in ros2"""
         try:
             self.color_image = self.bridge.imgmsg_to_cv2(data,desired_encoding='bgr8')
         except CvBridgeError as e:
@@ -647,6 +666,7 @@ class CameraProcessor(Node):
             return
 
     def aligned_depth_image_callback(self,data):
+        """Use cvbridge to use aligned_depth_image from intel realsense in ros2"""
         try:
             self.aligned_depth_image = self.bridge.imgmsg_to_cv2(data)
         except CvBridgeError as e:
@@ -654,6 +674,7 @@ class CameraProcessor(Node):
             return
 
     def color_info_callback(self,info):
+        """Get image depth information into ros2"""
         # https://github.com/IntelRealSense/realsense-ros/blob/ros2-development/realsense2_camera/scripts/show_center_depth.py
         try:
             if self.intrinsics:
