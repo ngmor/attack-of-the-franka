@@ -80,8 +80,8 @@ class PickupLightsaberState(Enum):
     GRASP_WAIT = auto(),
     ADD_ATTACHED_COLLISION_START = auto(),
     ADD_ATTACHED_COLLISION_WAIT = auto()
-    LIFT_START = auto(),
-    LIFT_WAIT = auto(),
+    DRAW_START = auto(),
+    DRAW_WAIT = auto(),
     RETURN_TO_HOME_START = auto(),
     RETURN_TO_HOME_WAIT = auto(),
 
@@ -173,7 +173,11 @@ class RobotControl(Node):
         self.srv_remove_separate_lightsaber = self.create_service(std_srvs.srv.Empty,
             'remove_separate_lightsaber', self.remove_separate_lightsaber_callback)
         self.srv_add_separate_lightsaber = self.create_service(std_srvs.srv.Empty,
-        'add_separate_lightsaber', self.add_separate_lightsaber_callback)
+            'add_separate_lightsaber', self.add_separate_lightsaber_callback)
+        self.srv_remove_attached_lightsaber = self.create_service(std_srvs.srv.Empty,
+            'remove_attached_lightsaber', self.remove_attached_lightsaber_callback)
+        self.srv_add_attached_lightsaber = self.create_service(std_srvs.srv.Empty,
+            'add_attached_lightsaber', self.add_attached_lightsaber_callback)
         self.look_for_enemy_srv = self.create_service(std_srvs.srv.Empty,
                                                     'look_for_enemy',
                                                     self.look_for_enemy_callback)
@@ -226,7 +230,7 @@ class RobotControl(Node):
         self.lightsaber_start_location.x = self.get_parameter("lightsaber.start_location.x").get_parameter_value().double_value
         self.lightsaber_start_location.y = self.get_parameter("lightsaber.start_location.y").get_parameter_value().double_value
         self.lightsaber_start_location.z = self.get_parameter("lightsaber.start_location.z").get_parameter_value().double_value
-        self.declare_parameter("lightsaber.lift_height", 0.5,
+        self.declare_parameter("lightsaber.lift_height", 0.25,
                                ParameterDescriptor(description="Height to lift lightsaber out of its sheath"))
         self.lightsaber_lift_height = self.get_parameter("lightsaber.lift_height").get_parameter_value().double_value
         self.declare_parameter("gripper.height", 0.08,
@@ -884,6 +888,7 @@ class RobotControl(Node):
             pass
         elif self.pickup_lightsaber_state == PickupLightsaberState.OPEN_WAIT:
             pass
+
         elif self.pickup_lightsaber_state == PickupLightsaberState.MOVE_TO_LIGHTSABER_STANDOFF_START:
             if self.moveit.planning:
                 self.pickup_lightsaber_state = PickupLightsaberState.MOVE_TO_LIGHTSABER_STANDOFF_WAIT
@@ -900,17 +905,21 @@ class RobotControl(Node):
                 pose.orientation.z = -0.5
                 pose.orientation.w =  0.5
                 self.moveit.plan_traj_to_pose(pose, execute=True)
+
         elif self.pickup_lightsaber_state == PickupLightsaberState.MOVE_TO_LIGHTSABER_STANDOFF_WAIT:
             if not self.moveit.busy:
                 self.pickup_lightsaber_state = PickupLightsaberState.REMOVE_SEPARATE_COLLISION_START
+
         elif self.pickup_lightsaber_state == PickupLightsaberState.REMOVE_SEPARATE_COLLISION_START:
             if self.moveit.busy_updating_obstacles:
                 self.pickup_lightsaber_state = PickupLightsaberState.REMOVE_SEPARATE_COLLISION_WAIT
             else:
                 self.remove_separate_lightsaber()
+
         elif self.pickup_lightsaber_state == PickupLightsaberState.REMOVE_SEPARATE_COLLISION_WAIT:
             if not self.moveit.busy_updating_obstacles:
                 self.pickup_lightsaber_state = PickupLightsaberState.MOVE_TO_LIGHTSABER_PICK_START
+
         elif self.pickup_lightsaber_state == PickupLightsaberState.MOVE_TO_LIGHTSABER_PICK_START:
             if self.moveit.planning:
                 self.pickup_lightsaber_state = PickupLightsaberState.MOVE_TO_LIGHTSABER_PICK_WAIT
@@ -927,30 +936,59 @@ class RobotControl(Node):
                 pose.orientation.z = -0.5
                 pose.orientation.w =  0.5
                 self.moveit.plan_traj_to_pose(pose, execute=True)
-        elif self.pickup_lightsaber_state == PickupLightsaberState.MOVE_TO_LIGHTSABER_STANDOFF_WAIT:
+
+        elif self.pickup_lightsaber_state == PickupLightsaberState.MOVE_TO_LIGHTSABER_PICK_WAIT:
             if not self.moveit.busy:
-                self.pickup_lightsaber_state = PickupLightsaberState.GRASP_START
+                self.pickup_lightsaber_state = PickupLightsaberState.ADD_ATTACHED_COLLISION_START
+
         elif self.pickup_lightsaber_state == PickupLightsaberState.GRASP_START:
             pass
+
         elif self.pickup_lightsaber_state == PickupLightsaberState.GRASP_WAIT:
             pass
+
         elif self.pickup_lightsaber_state == PickupLightsaberState.ADD_ATTACHED_COLLISION_START:
             if self.moveit.busy_updating_obstacles:
                 self.pickup_lightsaber_state = PickupLightsaberState.ADD_ATTACHED_COLLISION_WAIT
             else:
                 self.add_attached_lightsaber()
+
         elif self.pickup_lightsaber_state == PickupLightsaberState.ADD_ATTACHED_COLLISION_WAIT:
             if not self.moveit.busy_updating_obstacles:
-                self.pickup_lightsaber_state = PickupLightsaberState.LIFT_START
+                self.pickup_lightsaber_state = PickupLightsaberState.DRAW_START
 
-        elif self.pickup_lightsaber_state == PickupLightsaberState.LIFT_START:
-            pass
-        elif self.pickup_lightsaber_state == PickupLightsaberState.LIFT_WAIT:
-            pass
+        elif self.pickup_lightsaber_state == PickupLightsaberState.DRAW_START:
+            if self.moveit.planning:
+                self.pickup_lightsaber_state = PickupLightsaberState.DRAW_WAIT
+            else:
+                pose = geometry_msgs.msg.Pose()
+                pose.position.x = self.lightsaber_start_location.x
+                pose.position.y = self.lightsaber_start_location.y + \
+                                  self.gripper_tcp_offset
+                pose.position.z = self.lightsaber_start_location.z + \
+                                  self.lightsaber_full_length / 2. - \
+                                  self.lightsaber_grip_offset + \
+                                  (self.lightsaber_lift_height * 1.2)
+                pose.orientation.x = 0.5
+                pose.orientation.y = 0.5
+                pose.orientation.z = -0.5
+                pose.orientation.w =  0.5
+                self.moveit.plan_traj_to_pose(pose, execute=True)
+
+        elif self.pickup_lightsaber_state == PickupLightsaberState.DRAW_WAIT:
+            if not self.moveit.busy:
+                self.pickup_lightsaber_state = PickupLightsaberState.RETURN_TO_HOME_START
+
         elif self.pickup_lightsaber_state == PickupLightsaberState.RETURN_TO_HOME_START:
-            pass
+            if self.moveit.planning:
+                self.pickup_lightsaber_state = PickupLightsaberState.RETURN_TO_HOME_WAIT
+            else:
+                self.moveit.move_to_home()
+
         elif self.pickup_lightsaber_state == PickupLightsaberState.RETURN_TO_HOME_WAIT:
-            pass
+            if not self.moveit.busy:
+                done = True
+
 
         return done
 
@@ -1516,7 +1554,7 @@ class RobotControl(Node):
         pose = geometry_msgs.msg.Pose()
         pose.position.x = self.lightsaber_full_length / 2. - self.lightsaber_grip_offset
         pose.position.y = 0.0
-        pose.position.z = 0.0
+        pose.position.z = self.gripper_tcp_offset
         pose.orientation.y = -1.0
         attached_obstacle.object.primitive_poses = [pose]
 
@@ -1546,6 +1584,16 @@ class RobotControl(Node):
 
     def remove_separate_lightsaber_callback(self, request,response):
         self.remove_separate_lightsaber()
+
+        return response
+
+    def add_attached_lightsaber_callback(self, request,response):
+        self.add_attached_lightsaber()
+
+        return response
+
+    def remove_attached_lightsaber_callback(self, request,response):
+        self.remove_attached_lightsaber()
 
         return response
 
