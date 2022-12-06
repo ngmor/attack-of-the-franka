@@ -245,7 +245,7 @@ class CameraProcessor(Node):
         self.declare_parameter("enable_ally_sliders", False,
                                ParameterDescriptor(description="Enable Ally HSV sliders"))
         self.enable_ally_sliders = self.get_parameter("enable_ally_sliders").get_parameter_value().bool_value
-        self.declare_parameter("enable_enemy_sliders", False,
+        self.declare_parameter("enable_enemy_sliders", True,
                                ParameterDescriptor(description="Enable Enemy HSV sliders"))
         self.enable_enemy_sliders = self.get_parameter("enable_enemy_sliders").get_parameter_value().bool_value
         self.declare_parameter("enable_filtering_sliders", False,
@@ -321,7 +321,7 @@ class CameraProcessor(Node):
 
         self.ally_hsv = HSVLimits('Ally',self.ally_mask_window_name,[100,57,120],[142,255,255],self.enable_ally_sliders)
        # self.enemy_hsv = HSVLimits('Enemy',self.enemy_mask_window_name,[169,81,167],[180,255,255],self.enable_enemy_sliders)
-        self.enemy_hsv = HSVLimits('Enemy',self.enemy_mask_window_name,[0,90,182],[180,255,255],self.enable_enemy_sliders)
+        self.enemy_hsv = HSVLimits('Enemy',self.enemy_mask_window_name,[0,69,193],[180,255,255],self.enable_enemy_sliders)
 
         self.static_broadcaster = StaticTransformBroadcaster(self)
         self.broadcaster = TransformBroadcaster(self)

@@ -475,7 +475,7 @@ class RobotControl(Node):
 
                         self.goal_waypoint.position.x = x_pos - (self.lightsaber_full_length*0.75)
                         self.goal_waypoint.position.y = y_pos + self.sign*0.16            #adding slight offset (slightly more than half the block width)
-                        self.goal_waypoint.position.z = -self.table_offset + height + 0.18     #0.2
+                        self.goal_waypoint.position.z = -self.table_offset + height + 0.1     #0.2
                         self.get_logger().info(f'goal z: {self.goal_waypoint.position.z}')
 
                         self.goal_waypoint.orientation.x = math.pi
@@ -484,7 +484,7 @@ class RobotControl(Node):
                         self.knock_enemy_waypoint = geometry_msgs.msg.Pose()
                         self.knock_enemy_waypoint.position.x = x_pos - (self.lightsaber_full_length*0.75)
                         self.knock_enemy_waypoint.position.y = y_pos + self.sign*0.0725            #adding slight offset (slightly more than half the block width)
-                        self.knock_enemy_waypoint.position.z = -self.table_offset + height + 0.18
+                        self.knock_enemy_waypoint.position.z = -self.table_offset + height + 0.1
                         self.knock_enemy_waypoint.orientation.x = math.pi
                         self.knock_enemy_waypoint.orientation.z = -math.pi/16
 
@@ -793,9 +793,11 @@ class RobotControl(Node):
                 self.get_logger().info(f'num moves completed: {self.num_moves_completed}')
                 self.get_logger().info(f'FUCK!!!!')
                 if self.num_moves_completed < self.num_movements:
-                    if not self.is_stab_motion:
+                    if self.sign == 1:
                         self.get_logger().info("next waypoint!")
-                        self.state = State.DYNAMIC_MOTION
+                        self.state = State.LEFT_DYNAMIC_MOTION
+                    elif not self.is_stab_motion:
+                        self.state = State.RIGHT_DYNAMIC_MOTION
                     else:
                         self.state = State.STAB_MOTION
                 else:

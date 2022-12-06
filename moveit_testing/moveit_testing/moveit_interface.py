@@ -292,11 +292,6 @@ class MoveIt():
                 f"MoveIt main sequence changed to {self._state.name}")
             self._state_last = self._state
 
-        if self._plan_state == _PlanState.IDLE:
-            self.plan_idle = True
-        else:
-            self.plan_idle = False
-
         # reset states to prevent init bugs
         if self._state != _State.PLANNING:
             self._plan_state = _PlanState.IDLE
@@ -344,6 +339,7 @@ class MoveIt():
         # Set externally accessible status variables
         self.busy = not (self._state == _State.IDLE)
         self.planning = self._state == _State.PLANNING
+        self.plan_idle = self._plan_state == _PlanState.IDLE
         self.executing = self._state == _State.EXECUTING
         self.planning_and_executing = (self.planning or self.executing) and self._plan_and_execute
 
@@ -501,8 +497,6 @@ class MoveIt():
                 # Trigger compute IK once at start of state
                 # self._node.get_logger().info(f'goal pose: {type(self._goal_pose)}')
                 self._ik_request(self._start_joint_states, self._goal_pose)
-                self._node.get_logger().error(
-                        "Requested!")
             # wait for IK to finish
             if self._ik_future.done():
 
