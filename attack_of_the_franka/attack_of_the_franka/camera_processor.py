@@ -245,9 +245,15 @@ class CameraProcessor(Node):
         self.declare_parameter("enable_ally_sliders", False,
                                ParameterDescriptor(description="Enable Ally HSV sliders"))
         self.enable_ally_sliders = self.get_parameter("enable_ally_sliders").get_parameter_value().bool_value
-        self.declare_parameter("enable_enemy_sliders", False,
+        self.declare_parameter("enable_enemy_sliders", True,
                                ParameterDescriptor(description="Enable Enemy HSV sliders"))
         self.enable_enemy_sliders = self.get_parameter("enable_enemy_sliders").get_parameter_value().bool_value
+        self.declare_parameter("invert_ally_hue", False,
+                               ParameterDescriptor(description="Inverts ally hue range"))
+        self.invert_ally_hue = self.get_parameter("invert_ally_hue").get_parameter_value().bool_value
+        self.declare_parameter("invert_enemy_hue", True,
+                               ParameterDescriptor(description="Inverts enemy hue range"))
+        self.invert_enemy_hue = self.get_parameter("invert_enemy_hue").get_parameter_value().bool_value
         self.declare_parameter("enable_filtering_sliders", False,
                                ParameterDescriptor(description="Enable filtering sliders"))
         self.enable_filtering_sliders = self.get_parameter("enable_filtering_sliders").get_parameter_value().bool_value
@@ -320,7 +326,7 @@ class CameraProcessor(Node):
         self.contours_filtered_enemy = []
 
         self.ally_hsv = HSVLimits('Ally',self.ally_mask_window_name,[100,57,120],[142,255,255],self.enable_ally_sliders)
-        self.enemy_hsv = HSVLimits('Enemy',self.enemy_mask_window_name,[169,81,167],[180,255,255],self.enable_enemy_sliders)
+        self.enemy_hsv = HSVLimits('Enemy',self.enemy_mask_window_name,[20,81,167],[160,255,255],self.enable_enemy_sliders)
 
         self.static_broadcaster = StaticTransformBroadcaster(self)
         self.broadcaster = TransformBroadcaster(self)
@@ -374,7 +380,22 @@ class CameraProcessor(Node):
         kernel = np.ones((self.filter_kernel,self.filter_kernel),np.uint8)
 
         # Threshold HSV image to get only ally color
-        mask_ally = cv2.inRange(hsv_image,self.ally_hsv.lower.to_np_array(),self.ally_hsv.upper.to_np_array())
+        if not self.invert_ally_hue:
+            mask_ally = cv2.inRange(hsv_image,self.ally_hsv.lower.to_np_array(),self.ally_hsv.upper.to_np_array())
+        else:
+            # Split into 2 inRange calls and logically and them
+            temp_lower = self.ally_hsv.lower.to_np_array()
+            temp_upper = self.ally_hsv.upper.to_np_array()
+
+            temp_lower[0] = 0
+            temp_upper[0] = self.ally_hsv.lower.H
+
+            mask_ally = cv2.inRange(hsv_image,temp_lower,temp_upper)
+
+            temp_lower[0] = self.ally_hsv.upper.H
+            temp_upper[0] = 255
+
+            mask_ally += cv2.inRange(hsv_image,temp_lower,temp_upper)
         
         # Get contours of ally
         ret_ally, thresh_ally = cv2.threshold(mask_ally, 127, 255, 0)
@@ -421,7 +442,22 @@ class CameraProcessor(Node):
 
 
         # Threshold HSV image to get only enemy color
-        mask_enemy = cv2.inRange(hsv_image,self.enemy_hsv.lower.to_np_array(),self.enemy_hsv.upper.to_np_array())
+        if not self.invert_enemy_hue:
+            mask_enemy = cv2.inRange(hsv_image,self.enemy_hsv.lower.to_np_array(),self.enemy_hsv.upper.to_np_array())
+        else:
+            # Split into 2 inRange calls and logically and them
+            temp_lower = self.enemy_hsv.lower.to_np_array()
+            temp_upper = self.enemy_hsv.upper.to_np_array()
+
+            temp_lower[0] = 0
+            temp_upper[0] = self.enemy_hsv.lower.H
+
+            mask_enemy = cv2.inRange(hsv_image,temp_lower,temp_upper)
+
+            temp_lower[0] = self.enemy_hsv.upper.H
+            temp_upper[0] = 255
+
+            mask_enemy += cv2.inRange(hsv_image,temp_lower,temp_upper)
 
         # Get contours of ally
         ret_enemy, thresh_enemy = cv2.threshold(mask_enemy, 127, 255, 0)
