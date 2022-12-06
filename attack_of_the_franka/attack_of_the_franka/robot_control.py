@@ -522,9 +522,8 @@ class RobotControl(Node):
                         self.right_waypoint_movements.append([self.right_goal_waypoint, self.right_knock_enemy_waypoint])
                         self.num_movements = len(self.waypoint_movements[0])
                         self.get_logger().info(f'num movements: {self.num_movements}')
-                        ####################
-                        # Testing check for if ally would be hit by falling enemy block
-                        ####################
+
+                        # check if ally would be hit by falling enemy block
                         if self.check_ally_danger_fall(self.detected_enemies[i], 0):
                             self.state = State.LEFT_DYNAMIC_MOTION
                         elif self.check_ally_danger_fall(self.detected_enemies[i], 1):
@@ -1807,10 +1806,14 @@ class RobotControl(Node):
         return all_transforms_found
 
     def check_ally_danger_fall(self, enemy_obj, swing_style):
+        """
+        
+        """
         # y is left to right
         # x is forward to backward
         enemy_to_ally = DetectedObjectData(enemy_obj)
         for ally in self.detected_allies:
+            self.get_logger().info(f'seeing {len(self.detected_allies)} allies on field')
             enemy_to_ally = self.tf_buffer.lookup_transform(ally.obj.name, enemy_obj.obj.name, rclpy.time.Time())
             dist_y = enemy_to_ally.transform.translation.y
             dist_x = enemy_to_ally.transform.translation.x
