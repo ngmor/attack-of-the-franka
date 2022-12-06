@@ -457,7 +457,10 @@ class RobotControl(Node):
             self.x_disp = []
             self.rotate = []
             self.waypoint_movements = []
+            self.right_waypoint_movements = []
             self.goal_waypoint = geometry_msgs.msg.Pose()
+            self.right_goal_waypoint = geometry_msgs.msg.Pose()
+            self.right_knock_enemy_waypoint = geometry_msgs.msg.Pose()
             if not self.moveit.busy:
                 if all_transforms_found:
                     self.enemies_before = len(self.detected_enemies)
@@ -473,32 +476,59 @@ class RobotControl(Node):
                         self.get_logger().info(f'height: {self.detected_enemies[i].tf.transform.translation.z}')
                         self.get_logger().info(f'table1 z: {self.table1_z}')
 
+                        #left waypoint
                         self.goal_waypoint.position.x = x_pos - (self.lightsaber_full_length*0.75)
-                        self.goal_waypoint.position.y = y_pos + self.sign*0.16            #adding slight offset (slightly more than half the block width)
+                        self.goal_waypoint.position.y = y_pos + 0.16            #adding slight offset (slightly more than half the block width)
                         self.goal_waypoint.position.z = -self.table_offset + height + 0.1     #0.2
                         self.get_logger().info(f'goal z: {self.goal_waypoint.position.z}')
-
                         self.goal_waypoint.orientation.x = math.pi
                         self.goal_waypoint.orientation.z = -math.pi/16
 
                         self.knock_enemy_waypoint = geometry_msgs.msg.Pose()
                         self.knock_enemy_waypoint.position.x = x_pos - (self.lightsaber_full_length*0.75)
-                        self.knock_enemy_waypoint.position.y = y_pos + self.sign*0.0725            #adding slight offset (slightly more than half the block width)
+                        self.knock_enemy_waypoint.position.y = y_pos + 0.0725            #adding slight offset (slightly more than half the block width)
                         self.knock_enemy_waypoint.position.z = -self.table_offset + height + 0.1
                         self.knock_enemy_waypoint.orientation.x = math.pi
                         self.knock_enemy_waypoint.orientation.z = -math.pi/16
 
+                        #right waypoint
+                        self.right_goal_waypoint.position.x = x_pos - (self.lightsaber_full_length*0.75)
+                        self.right_goal_waypoint.position.y = y_pos - 0.16            #adding slight offset (slightly more than half the block width)
+                        self.right_goal_waypoint.position.z = -self.table_offset + height + 0.1     #0.2
+                        self.get_logger().info(f'goal z: {self.right_goal_waypoint.position.z}')
+                        self.right_goal_waypoint.orientation.x = math.pi
+                        self.right_goal_waypoint.orientation.z = -math.pi/16
+
+                        self.right_knock_enemy_waypoint = geometry_msgs.msg.Pose()
+                        self.right_knock_enemy_waypoint.position.x = x_pos - (self.lightsaber_full_length*0.75)
+                        self.right_knock_enemy_waypoint.position.y = y_pos - 0.0725            #adding slight offset (slightly more than half the block width)
+                        self.right_knock_enemy_waypoint.position.z = -self.table_offset + height + 0.1
+                        self.right_knock_enemy_waypoint.orientation.x = math.pi
+                        self.right_knock_enemy_waypoint.orientation.z = -math.pi/16
+
+
                         self.get_logger().info("adding waypoints")
                         self.waypoint_movements.append([self.goal_waypoint, self.knock_enemy_waypoint])
+                        self.right_waypoint_movements.append([self.right_goal_waypoint, self.right_knock_enemy_waypoint])
                         self.num_movements = len(self.waypoint_movements[0])
                         self.get_logger().info(f'num movements: {self.num_movements}')
                         ####################
                         # Testing check for if ally would be hit by falling enemy block
                         ####################
-                        self.check_ally_danger_fall(self.detected_enemies[i], 0)
+                        if self.check_ally_danger_fall(self.detected_enemies[i], 0):
+                            self.state = State.LEFT_DYNAMIC_MOTION
+                        elif self.check_ally_danger_fall(self.detected_enemies[i], 1):
+                            self.state = State.RIGHT_DYNAMIC_MOTION
+                            self.sign = -1
+                        elif self.check_ally_danger_fall(self.detected_enemies[i], 2):
+                            self.state = State.STAB_MOTION
+                            self.sign = -1
+                            self.is_stab_motion = True
+                        else:
+                            self.get_logger().error("ALLY IN DANGER, CAN'T ATTACK ENEMY")
+                            # instead of idle, go to next enemy
+                            self.state = State.IDLE
 
-                    
-                    self.state = State.LEFT_DYNAMIC_MOTION
 
         elif self.state == State.LEFT_DYNAMIC_MOTION:
             self.get_logger().info("Left Dyanmic Motion")
@@ -509,7 +539,7 @@ class RobotControl(Node):
             #     self.state = State.WAYPOINTS_WAIT
             #     self.get_logger().info("error, try different state!")
             else:
-                # self.get_logger().info(f'waypoint array: {self.waypoint_movements}')
+                self.get_logger().info(f'waypoint array: {self.waypoint_movements}')
                 if self.waypoint_movements:
                     try:
                         self.get_logger().info("trying movement!")
@@ -541,7 +571,7 @@ class RobotControl(Node):
                     try:
                         self.get_logger().info("trying movement!")
                         # self.get_logger().info(f'at index num_waypoints, num_moves: {self.num_waypoints_completed}, {self.num_moves_completed}')
-                        self.moveit.plan_traj_to_pose(self.waypoint_movements[self.num_waypoints_completed][self.num_moves_completed])
+                        self.moveit.plan_traj_to_pose(self.right_waypoint_movements[self.num_waypoints_completed][self.num_moves_completed])
                         self.num_moves_completed += 1
                         if self.num_moves_completed % 2 == 0:
                             self.num_waypoints_completed += 1
@@ -793,7 +823,7 @@ class RobotControl(Node):
                 self.get_logger().info(f'num moves completed: {self.num_moves_completed}')
                 self.get_logger().info(f'FUCK!!!!')
                 if self.num_moves_completed < self.num_movements:
-                    if self.sign == 1:
+                    if self.moveit.get_last_error() == MoveItApiErrors.NO_ERROR and self.sign == 1:
                         self.get_logger().info("next waypoint!")
                         self.state = State.LEFT_DYNAMIC_MOTION
                     elif not self.is_stab_motion:
@@ -845,7 +875,9 @@ class RobotControl(Node):
         if self.obstacles_added == 0:
             self.state = State.SETUP
         else:
-            self.state = State.FIND_ALLIES
+            self.state = State.LOOK_FOR_ENEMY
+            self.num_waypoints_completed = 0
+            self.num_waypoints_completed = 0
         return response
 
     def grip_open_close_callback(self, request, response):
@@ -1769,24 +1801,24 @@ class RobotControl(Node):
                 self.get_logger().info(f'dist_x factor {(dist_x-0.5*self.block_width)}, {self.block_height+self.block_width*0.5}')
                 if (abs(dist_y-0.5*self.block_width) < self.block_width*1.5) and (dist_x>=0) and ((dist_x-0.5*self.block_width) < (self.block_height+self.block_width*0.5)):
                     self.get_logger().info(f'not safe to attack in left swing')
-                    # return False
-                swing_style = 1
+                    return False
+                # swing_style = 1
             if swing_style == 1:
                 # swinging so the brick falls to the right
                 self.get_logger().info(f'dist_y factor {abs(dist_y-0.5*self.block_width)}, {self.block_width*1.5}')
                 self.get_logger().info(f'dist_x factor {(dist_x+0.5*self.block_width)}, {-(self.block_height+self.block_width*0.5)}')
                 if (abs(dist_y-0.5*self.block_width) < self.block_width*1.5) and (dist_x <= 0) and ((dist_x+0.5*self.block_width) > -(self.block_height+self.block_width*0.5)):
                     self.get_logger().info(f'not safe to attack in right swing')
-                    # return False
-                swing_style = 2
+                    return False
+                # swing_style = 2
             if swing_style == 2:
                 # swinging so the brick falls straight backwards
                 self.get_logger().info(f'dist_y factor {(dist_y-0.5*self.block_width)}, {(self.block_height+self.block_width*0.5)}')
                 self.get_logger().info(f'dist_x factor {(abs(dist_x)-0.5*self.block_width)}, {self.block_width}')
                 if ((abs(dist_x)-0.5*self.block_width) < self.block_width) and ((dist_y-0.5*self.block_width) < (self.block_height+self.block_width*0.5)):
                     self.get_logger().info(f'not safe to attack in stabbing style')
-                    # return False
-            # self.get_logger().info(f'safe to attack in style {swing_style}')
+                    return False
+            self.get_logger().info(f'safe to attack in style {swing_style}')
         return True
 
 def entry(args=None):
