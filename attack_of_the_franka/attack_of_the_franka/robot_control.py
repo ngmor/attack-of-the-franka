@@ -543,6 +543,7 @@ class RobotControl(Node):
                         ####################
                         # Testing check for if ally would be hit by falling enemy block
                         ####################
+                        self.get_logger().info("about to check for ally danger")
                         if self.check_ally_danger_fall(self.detected_enemies[i], 0):
                             self.state = State.LEFT_DYNAMIC_MOTION
                         elif self.check_ally_danger_fall(self.detected_enemies[i], 1):
@@ -1830,6 +1831,7 @@ class RobotControl(Node):
     def check_ally_danger_fall(self, enemy_obj, swing_style):
         # y is left to right
         # x is forward to backward
+        self.get_logger().info("in check_ally_danger_fall")  
         enemy_to_ally = DetectedObjectData(enemy_obj)
         for ally in self.detected_allies:
             self.get_logger().info(f'seeing {len(self.detected_allies)} allies on field')
@@ -1860,8 +1862,9 @@ class RobotControl(Node):
                 self.get_logger().info(f'dist_y factor {(dist_y-0.5*self.block_width)}, {(self.block_height+self.block_width*0.5)}')
                 self.get_logger().info(f'dist_x factor {(abs(dist_x)-0.5*self.block_width)}, {self.block_width}')
                 if ((abs(dist_x)-0.5*self.block_width) < self.block_width) and ((dist_y-0.5*self.block_width) < (self.block_height+self.block_width*0.5)):
-                    self.get_logger().info(f'not safe to attack in stabbing style')
-                    return False
+                    if(dist_y>= 0):
+                        self.get_logger().info(f'not safe to attack in stabbing style')
+                        return False
             self.get_logger().info(f'safe to attack in style {swing_style}')
         return True
 
