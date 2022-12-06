@@ -151,7 +151,7 @@ class RobotControl(Node):
             'grasp_plan', self.gripper_callback)
         self.srv_pickup_lightsaber = self.create_service(std_srvs.srv.Empty, 'pickup_lightsaber',
                                                          self.pickup_lightsaber_callback)
-        self.pickup_action_client = ActionClient(self, control_msgs.action.GripperCommand,
+        self.gripper_action_client = ActionClient(self, control_msgs.action.GripperCommand,
                                          'panda_gripper/gripper_action')
         
         self.test_followjoints = ActionClient(self, control_msgs.action.FollowJointTrajectory,
@@ -186,7 +186,12 @@ class RobotControl(Node):
         self.tf_buffer = Buffer()
         self.tf_obj_listener = TransformListener(self.tf_buffer, self)
 
-         # Dimension parameters
+        # Control parameters
+        self.declare_parameter("simulation", True,
+                               ParameterDescriptor(description="Whether the robot is being run in simulation"))
+        self.simulation = self.get_parameter("simulation").get_parameter_value().bool_value
+
+        # Dimension parameters
         self.declare_parameter("robot_table.width", 0.605,
                                ParameterDescriptor(description="Robot table width"))
         self.robot_table_width = self.get_parameter("robot_table.width").get_parameter_value().double_value
@@ -383,16 +388,16 @@ class RobotControl(Node):
         grip_msg = control_msgs.action.GripperCommand.Goal()
         grip_msg.command.position = 0.0 #0.01
         grip_msg.command.max_effort = 60.0
-        if self.pickup_action_client.server_is_ready():
-            self.pickup_action_client.send_goal_async(grip_msg)
+        if self.gripper_action_client.server_is_ready():
+            self.gripper_action_client.send_goal_async(grip_msg)
         else:
             return None
     
     def open_gripper(self):
         grip_msg = control_msgs.action.GripperCommand.Goal()
         grip_msg.command.position = 0.03    #0.04
-        if self.pickup_action_client.server_is_ready():
-            return self.pickup_action_client.send_goal_async(grip_msg)
+        if self.gripper_action_client.server_is_ready():
+            return self.gripper_action_client.send_goal_async(grip_msg)
         else:
             return None
 
@@ -882,12 +887,22 @@ class RobotControl(Node):
 
         elif self.pickup_lightsaber_state == PickupLightsaberState.MOVE_TO_HOME_WAIT:
             if not self.moveit.busy:
-                self.pickup_lightsaber_state = PickupLightsaberState.MOVE_TO_LIGHTSABER_STANDOFF_START
+
+                # Skip gripper actions in simulation since action server is not available
+                if self.simulation:
+                    self.pickup_lightsaber_state = PickupLightsaberState.MOVE_TO_LIGHTSABER_STANDOFF_START
+                else:
+                    self.pickup_lightsaber_state = PickupLightsaberState.OPEN_START
 
         elif self.pickup_lightsaber_state == PickupLightsaberState.OPEN_START:
-            pass
+            self.pickup_lightsaber_future = self.open_gripper()
+
+            if self.pickup_lightsaber_future is not None:
+                self.pickup_lightsaber_state = PickupLightsaberState.OPEN_WAIT
+
         elif self.pickup_lightsaber_state == PickupLightsaberState.OPEN_WAIT:
-            pass
+            if self.pickup_lightsaber_future.done():
+                self.pickup_lightsaber_state = PickupLightsaberState.MOVE_TO_LIGHTSABER_STANDOFF_START
 
         elif self.pickup_lightsaber_state == PickupLightsaberState.MOVE_TO_LIGHTSABER_STANDOFF_START:
             if self.moveit.planning:
@@ -939,13 +954,22 @@ class RobotControl(Node):
 
         elif self.pickup_lightsaber_state == PickupLightsaberState.MOVE_TO_LIGHTSABER_PICK_WAIT:
             if not self.moveit.busy:
-                self.pickup_lightsaber_state = PickupLightsaberState.ADD_ATTACHED_COLLISION_START
+
+                # Skip gripper actions in simulation since action server is not available
+                if self.simulation:
+                    self.pickup_lightsaber_state = PickupLightsaberState.ADD_ATTACHED_COLLISION_START
+                else:
+                    self.pickup_lightsaber_state = PickupLightsaberState.GRASP_START
 
         elif self.pickup_lightsaber_state == PickupLightsaberState.GRASP_START:
-            pass
+            self.pickup_lightsaber_future = self.grasp()
+
+            if self.pickup_lightsaber_future is not None:
+                self.pickup_lightsaber_state = PickupLightsaberState.GRASP_WAIT
 
         elif self.pickup_lightsaber_state == PickupLightsaberState.GRASP_WAIT:
-            pass
+            if self.pickup_lightsaber_future.done():
+                self.pickup_lightsaber_state = PickupLightsaberState.ADD_ATTACHED_COLLISION_START
 
         elif self.pickup_lightsaber_state == PickupLightsaberState.ADD_ATTACHED_COLLISION_START:
             if self.moveit.busy_updating_obstacles:
