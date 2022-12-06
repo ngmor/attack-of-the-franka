@@ -379,9 +379,18 @@ class CameraProcessor(Node):
         self.static_broadcaster.sendTransform(tf_table_apriltag_to_base)
 
         self.calibration_data_points = 100 # TODO make parameter?
+
         self.calibrating_robot_table = not self.update_calibration_continuously
         self.robot_table_calibration_array = []
         self.tf_camera_to_robot_table_calibrated = None
+
+        self.calibrating_workspace1 = not self.update_calibration_continuously
+        self.workspace1_calibration_array = []
+        self.tf_camera_to_workspace1_calibrated = None
+
+        self.calibrating_workspace2 = not self.update_calibration_continuously
+        self.workspace2_calibration_array = []
+        self.tf_camera_to_workspace2_calibrated = None
 
         self.dead_enemies_count = 0
         
@@ -607,8 +616,9 @@ class CameraProcessor(Node):
                     FRAMES().WORK_TABLE1_RAW,
                     rclpy.time.Time()
                 )
+                workspace1_detected = True
             except Exception:
-                pass
+                workspace1_detected = False
 
             try:
                 self.tf_camera_to_workspace2_raw = self.buffer.lookup_transform(
@@ -616,8 +626,9 @@ class CameraProcessor(Node):
                     FRAMES().WORK_TABLE2_RAW,
                     rclpy.time.Time()
                 )
+                workspace2_detected = True
             except Exception:
-                pass
+                workspace2_detected = False
 
         self.work_area_apriltags_detected = (
             (self.tf_camera_to_workspace1_raw is not None) 
@@ -662,17 +673,74 @@ class CameraProcessor(Node):
 
         # Broadcast last known transforms even if we lose AprilTags
         if self.tf_camera_to_workspace1_raw is not None:
-            transform = copy.deepcopy(self.tf_camera_to_workspace1_raw)
+
+            # If updating continuously, always send most recent available transform
+            if self.update_calibration_continuously:
+                transform = copy.deepcopy(self.tf_camera_to_workspace1_raw)
+
+            # Otherwise, send calibrated transform
+            else:
+                # collect data if performing a calibration
+                if self.calibrating_workspace1:
+                    # If all data is collected, update the calibrated transform
+                    if len(self.workspace1_calibration_array) >= self.calibration_data_points:
+                        self.tf_camera_to_workspace1_calibrated = copy.deepcopy(self.tf_camera_to_workspace1_raw)
+
+                        # Calculate average translation
+                        self.tf_camera_to_workspace1_calibrated.transform = get_average_transformation(self.workspace1_calibration_array)
+
+                        self.get_logger().info('Workspace 1 AprilTag calibration complete')
+
+                        self.calibrating_workspace1 = False
+
+                    # Collect data
+                    elif workspace1_detected:
+                        self.workspace1_calibration_array.append(copy.deepcopy(self.tf_camera_to_workspace1_raw.transform))
+
+                # if a calibration transform has been created, send it. Otherwise send latest transform
+                if self.tf_camera_to_workspace1_calibrated is not None:
+                    transform = copy.deepcopy(self.tf_camera_to_workspace1_calibrated)
+                else:
+                    transform = copy.deepcopy(self.tf_camera_to_workspace1_raw)
+                        
             transform.child_frame_id = FRAMES().WORK_TABLE1
             transform.header.stamp = time
-
             self.broadcaster.sendTransform(transform)
 
+        # Broadcast last known transforms even if we lose AprilTags
         if self.tf_camera_to_workspace2_raw is not None:
-            transform = copy.deepcopy(self.tf_camera_to_workspace2_raw)
+
+            # If updating continuously, always send most recent available transform
+            if self.update_calibration_continuously:
+                transform = copy.deepcopy(self.tf_camera_to_workspace2_raw)
+
+            # Otherwise, send calibrated transform
+            else:
+                # collect data if performing a calibration
+                if self.calibrating_workspace2:
+                    # If all data is collected, update the calibrated transform
+                    if len(self.workspace2_calibration_array) >= self.calibration_data_points:
+                        self.tf_camera_to_workspace2_calibrated = copy.deepcopy(self.tf_camera_to_workspace2_raw)
+
+                        # Calculate average translation
+                        self.tf_camera_to_workspace2_calibrated.transform = get_average_transformation(self.workspace2_calibration_array)
+
+                        self.get_logger().info('Workspace 2 AprilTag calibration complete')
+
+                        self.calibrating_workspace2 = False
+
+                    # Collect data
+                    elif workspace2_detected:
+                        self.workspace2_calibration_array.append(copy.deepcopy(self.tf_camera_to_workspace2_raw.transform))
+
+                # if a calibration transform has been created, send it. Otherwise send latest transform
+                if self.tf_camera_to_workspace2_calibrated is not None:
+                    transform = copy.deepcopy(self.tf_camera_to_workspace2_calibrated)
+                else:
+                    transform = copy.deepcopy(self.tf_camera_to_workspace2_raw)
+                        
             transform.child_frame_id = FRAMES().WORK_TABLE2
             transform.header.stamp = time
-
             self.broadcaster.sendTransform(transform)
 
         
