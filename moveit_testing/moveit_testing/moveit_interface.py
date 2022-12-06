@@ -420,6 +420,8 @@ class MoveIt():
                 self._obstacle_pub.publish(self._planning_scene)
                 self._obs_state = _ObstacleState.IDLE
 
+        self.busy_updating_obstacles = self._obs_state != _ObstacleState.IDLE
+
     def _plan_sequence(self):
         """
         Run plan subsequence.
@@ -993,25 +995,26 @@ class MoveIt():
         # TODO - return some sort of message indicating success or failure
         return
 
-    def update_attached_obstacles(self, attached_object, delete=False):
+    def update_attached_obstacles(self, attached_obstacle_list, delete=False):
         """
         Add an attached obstacle 
 
         Args:
-            attached_object: object of type moveit_msgs.msg.AttachedCollisionObject()
-                             to add to the Planning Scene
+            attached_obstacle_list: object of type moveit_msgs.msg.AttachedCollisionObject()
+                                    to add to the Planning Scene
         Returns
         -------
             none
         """
         if delete:
-            # TODO - fix
-            for i in range(len(self._attached_obstacles)):
-                if attached_object.object.id == self._attached_obstacles[i].object.id:
-                    self._attached_obstacles.pop(i)
+            for attached_obstacle in attached_obstacle_list:
+                for i in range(len(self._attached_obstacles)):
+                    if attached_obstacle.object.id == self._attached_obstacles[i].object.id:
+                        self._attached_obstacles.pop(i)
+                        break
         else:
-            # add object to attached obstacle list
-            self._attached_obstacles.append(attached_object)
+            # add object list to attached obstacle list
+            self._attached_obstacles.extend(attached_obstacle_list)
             
         self.update_obstacles([], False)
         return

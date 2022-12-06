@@ -64,7 +64,8 @@ class State(Enum):
 class PickupLightsaberState(Enum):
     """State machine for lightsaber pickup subsequence."""
 
-    ADD_COLLISION = auto(),
+    ADD_SEPARATE_COLLISION_START = auto(),
+    ADD_SEPARATE_COLLISION_WAIT = auto(),
     MOVE_TO_HOME_START = auto(),
     MOVE_TO_HOME_WAIT = auto(),
     OPEN_START = auto(),
@@ -73,7 +74,10 @@ class PickupLightsaberState(Enum):
     MOVE_TO_LIGHTSABER_WAIT = auto(),
     GRASP_START = auto(),
     GRASP_WAIT = auto(),
-    SWITCH_TO_ATTACHED_COLLISION = auto(),
+    REMOVE_SEPARATE_COLLISION_START = auto(),
+    REMOVE_SEPARATE_COLLISION_WAIT = auto(),
+    ADD_ATTACHED_COLLISION_START = auto(),
+    ADD_ATTACHED_COLLISION_WAIT = auto()
     LIFT_START = auto(),
     LIFT_WAIT = auto(),
     RETURN_TO_HOME_START = auto(),
@@ -292,7 +296,7 @@ class RobotControl(Node):
 
         self.state = State.IDLE
         self.state_last = None
-        self.pickup_lightsaber_state = PickupLightsaberState.ADD_COLLISION
+        self.pickup_lightsaber_state = PickupLightsaberState.ADD_SEPARATE_COLLISION_START
         self.pickup_lightsaber_state_last = None
 
         self.grip = 0
@@ -441,7 +445,7 @@ class RobotControl(Node):
 
         if new_state:
             self.get_logger().info(
-                f"MoveGroup main sequence changed to {self.state.name}")
+                f"robot_control main sequence changed to {self.state.name}")
             self.state_last = self.state
 
         # State machine
@@ -739,7 +743,7 @@ class RobotControl(Node):
 
             # reset subsequence on first callback of PICKUP_LIGHTSABER state
             if new_state:
-                self.pickup_lightsaber_state = PickupLightsaberState.ADD_COLLISION
+                self.pickup_lightsaber_state = PickupLightsaberState.ADD_SEPARATE_COLLISION_START
 
             # Execute subsequence to pickup the lightsaber
             # this method returns true if the subsequence is complete, false if not
@@ -847,17 +851,24 @@ class RobotControl(Node):
             self.get_logger().info(f"Pickup lightsaber sequence changed to {self.pickup_lightsaber_state.name}")
             self.pickup_lightsaber_state_last = self.pickup_lightsaber_state
 
-        if self.pickup_lightsaber_state == PickupLightsaberState.ADD_COLLISION:
-            self.add_separate_lightsaber()
-            self.pickup_lightsaber_state = PickupLightsaberState.MOVE_TO_HOME_START
-            self.test_count = 0 # TODO remove
+        if self.pickup_lightsaber_state == PickupLightsaberState.ADD_SEPARATE_COLLISION_START:
+            if self.moveit.busy_updating_obstacles:
+                self.pickup_lightsaber_state = PickupLightsaberState.ADD_SEPARATE_COLLISION_WAIT
+            else:
+                self.add_separate_lightsaber()
+        
+        if self.pickup_lightsaber_state == PickupLightsaberState.ADD_SEPARATE_COLLISION_WAIT:
+            if not self.moveit.busy_updating_obstacles:
+                self.pickup_lightsaber_state = PickupLightsaberState.MOVE_TO_HOME_START
+                self.test_count = 0 # TODO remove
+
         elif self.pickup_lightsaber_state == PickupLightsaberState.MOVE_TO_HOME_START:
             # TODO - remove
             self.test_count += 1
 
             if self.test_count > 200:
-                self.remove_separate_lightsaber()
-                done = True
+                self.pickup_lightsaber_state = PickupLightsaberState.REMOVE_SEPARATE_COLLISION_START
+
         elif self.pickup_lightsaber_state == PickupLightsaberState.MOVE_TO_HOME_WAIT:
             pass
         elif self.pickup_lightsaber_state == PickupLightsaberState.OPEN_START:
@@ -872,10 +883,30 @@ class RobotControl(Node):
             pass
         elif self.pickup_lightsaber_state == PickupLightsaberState.GRASP_WAIT:
             pass
-        elif self.pickup_lightsaber_state == PickupLightsaberState.SWITCH_TO_ATTACHED_COLLISION:
-            pass
+        elif self.pickup_lightsaber_state == PickupLightsaberState.REMOVE_SEPARATE_COLLISION_START:
+            if self.moveit.busy_updating_obstacles:
+                self.pickup_lightsaber_state = PickupLightsaberState.REMOVE_SEPARATE_COLLISION_WAIT
+            else:
+                self.remove_separate_lightsaber()
+        elif self.pickup_lightsaber_state == PickupLightsaberState.REMOVE_SEPARATE_COLLISION_WAIT:
+            if not self.moveit.busy_updating_obstacles:
+                self.pickup_lightsaber_state = PickupLightsaberState.ADD_ATTACHED_COLLISION_START
+        elif self.pickup_lightsaber_state == PickupLightsaberState.ADD_ATTACHED_COLLISION_START:
+            if self.moveit.busy_updating_obstacles:
+                self.pickup_lightsaber_state = PickupLightsaberState.ADD_ATTACHED_COLLISION_WAIT
+            else:
+                self.add_attached_lightsaber()
+        elif self.pickup_lightsaber_state == PickupLightsaberState.ADD_ATTACHED_COLLISION_WAIT:
+            if not self.moveit.busy_updating_obstacles:
+                self.pickup_lightsaber_state = PickupLightsaberState.LIFT_START
+                self.test_count = 0 # TODO remove
         elif self.pickup_lightsaber_state == PickupLightsaberState.LIFT_START:
-            pass
+            # TODO - remove
+            self.test_count += 1
+
+            if self.test_count > 200:
+                self.remove_attached_lightsaber()
+                done = True
         elif self.pickup_lightsaber_state == PickupLightsaberState.LIFT_WAIT:
             pass
         elif self.pickup_lightsaber_state == PickupLightsaberState.RETURN_TO_HOME_START:
@@ -1442,10 +1473,10 @@ class RobotControl(Node):
         attached_obstacle.link_name = 'panda_hand_tcp'
         attached_obstacle.object.header.frame_id = 'panda_hand_tcp'
         attached_obstacle.object.header.stamp = self.get_clock().now().to_msg()
-        attached_obstacle.object.id = 'gripping'
+        attached_obstacle.object.id = 'lightsaber'
 
         pose = geometry_msgs.msg.Pose()
-        pose.position.x = 0.411
+        pose.position.x = self.lightsaber_full_length / 2. - self.lightsaber_grip_offset
         pose.position.y = 0.0
         pose.position.z = 0.0
         pose.orientation.y = -1.0
@@ -1460,7 +1491,15 @@ class RobotControl(Node):
 
         attached_obstacle.touch_links = ['panda_rightfinger', 'panda_leftfinger', 'panda_hand_tcp', 'panda_hand']
 
-        self.moveit.update_attached_obstacles(attached_obstacle, delete=False)
+        self.moveit.update_attached_obstacles([attached_obstacle], delete=False)
+
+    def remove_attached_lightsaber(self):
+        """Remove lightsaber as an attached collision object."""
+
+        attached_obstacle = moveit_msgs.msg.AttachedCollisionObject()
+        attached_obstacle.object.id = 'lightsaber'
+
+        self.moveit.update_attached_obstacles([attached_obstacle], delete=True)
 
     def attached_obstacles_callback(self, request, response):
         """
@@ -1500,7 +1539,7 @@ class RobotControl(Node):
 
         attached_obstacle.touch_links = ['panda_rightfinger', 'panda_leftfinger', 'panda_hand_tcp', 'panda_hand']
 
-        self.moveit.update_attached_obstacles(attached_obstacle, delete=request.delete_obstacle)
+        self.moveit.update_attached_obstacles([attached_obstacle], delete=request.delete_obstacle)
 
         return response
 
@@ -1644,7 +1683,7 @@ class RobotControl(Node):
 
         attached_obstacle.touch_links = ['panda_link0', 'panda_link1']
 
-        self.moveit.update_attached_obstacles(attached_obstacle, delete=False)
+        self.moveit.update_attached_obstacles([attached_obstacle], delete=False)
 
 
 
