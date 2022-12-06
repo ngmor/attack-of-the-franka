@@ -226,6 +226,19 @@ class ContourData():
             # TODO add more information?
         )
 
+def get_average_transformation(transformation_array):
+    """Get average transformation from an array of transformations."""
+
+    transform = geometry_msgs.msg.TransformStamped().transform
+    transform.translation.x = np.average([val.translation.x for val in transformation_array])
+    transform.translation.y = np.average([val.translation.y for val in transformation_array])
+    transform.translation.z = np.average([val.translation.z for val in transformation_array])
+    transform.rotation.w = np.average([val.rotation.w for val in transformation_array])
+    transform.rotation.x = np.average([val.rotation.x for val in transformation_array])
+    transform.rotation.y = np.average([val.rotation.y for val in transformation_array])
+    transform.rotation.z = np.average([val.rotation.z for val in transformation_array])
+
+    return transform
 
 class CameraProcessor(Node):
     """TODO"""
@@ -245,7 +258,7 @@ class CameraProcessor(Node):
         self.declare_parameter("enable_ally_sliders", False,
                                ParameterDescriptor(description="Enable Ally HSV sliders"))
         self.enable_ally_sliders = self.get_parameter("enable_ally_sliders").get_parameter_value().bool_value
-        self.declare_parameter("enable_enemy_sliders", True,
+        self.declare_parameter("enable_enemy_sliders", False,
                                ParameterDescriptor(description="Enable Enemy HSV sliders"))
         self.enable_enemy_sliders = self.get_parameter("enable_enemy_sliders").get_parameter_value().bool_value
         self.declare_parameter("invert_ally_hue", False,
@@ -269,6 +282,9 @@ class CameraProcessor(Node):
         self.declare_parameter("sort_by_x", False,
                                ParameterDescriptor(description="sorts the allies and enemies in x"))
         self.sort_by_x = self.get_parameter("sort_by_x").get_parameter_value().bool_value
+        self.declare_parameter("update_calibration_continuously", False,
+                               ParameterDescriptor(description="Update AprilTag calibration continuously."))
+        self.update_calibration_continuously = self.get_parameter("update_calibration_continuously").get_parameter_value().bool_value
     
         # Dimension parameters
         self.declare_parameter("apriltags.robot_table_tag_size", 0.173,
@@ -361,6 +377,11 @@ class CameraProcessor(Node):
         time = self.get_clock().now().to_msg()
         tf_table_apriltag_to_base.header.stamp = time
         self.static_broadcaster.sendTransform(tf_table_apriltag_to_base)
+
+        self.calibration_data_points = 100 # TODO make parameter?
+        self.calibrating_robot_table = not self.update_calibration_continuously
+        self.robot_table_calibration_array = []
+        self.tf_camera_to_robot_table_calibrated = None
 
         self.dead_enemies_count = 0
         
@@ -574,16 +595,9 @@ class CameraProcessor(Node):
                 FRAMES().PANDA_TABLE_RAW,
                 rclpy.time.Time()
             )
+            robot_table_detected = True
         except Exception:
-            pass
-
-        # Broadcast last known transforms even if we lose AprilTags
-        if self.tf_camera_to_robot_table_raw is not None:
-            transform = copy.deepcopy(self.tf_camera_to_robot_table_raw)
-            transform.child_frame_id = FRAMES().PANDA_TABLE
-            transform.header.stamp = time
-
-            self.broadcaster.sendTransform(transform)
+            robot_table_detected = False
 
         # Get workspace transformations if possible
         if self.enable_work_area_apriltags:
@@ -609,6 +623,42 @@ class CameraProcessor(Node):
             (self.tf_camera_to_workspace1_raw is not None) 
             and (self.tf_camera_to_workspace2_raw is not None)
         )
+
+        # Broadcast last known transforms even if we lose AprilTags
+        if self.tf_camera_to_robot_table_raw is not None:
+
+            # If updating continuously, always send most recent available transform
+            if self.update_calibration_continuously:
+                transform = copy.deepcopy(self.tf_camera_to_robot_table_raw)
+
+            # Otherwise, send calibrated transform
+            else:
+                # collect data if performing a calibration
+                if self.calibrating_robot_table:
+                    # If all data is collected, update the calibrated transform
+                    if len(self.robot_table_calibration_array) >= self.calibration_data_points:
+                        self.tf_camera_to_robot_table_calibrated = copy.deepcopy(self.tf_camera_to_robot_table_raw)
+
+                        # Calculate average translation
+                        self.tf_camera_to_robot_table_calibrated.transform = get_average_transformation(self.robot_table_calibration_array)
+
+                        self.get_logger().info('Robot table AprilTag calibration complete')
+
+                        self.calibrating_robot_table = False
+
+                    # Collect data
+                    elif robot_table_detected:
+                        self.robot_table_calibration_array.append(copy.deepcopy(self.tf_camera_to_robot_table_raw.transform))
+
+                # if a calibration transform has been created, send it. Otherwise send latest transform
+                if self.tf_camera_to_robot_table_calibrated is not None:
+                    transform = copy.deepcopy(self.tf_camera_to_robot_table_calibrated)
+                else:
+                    transform = copy.deepcopy(self.tf_camera_to_robot_table_raw)
+                        
+            transform.child_frame_id = FRAMES().PANDA_TABLE
+            transform.header.stamp = time
+            self.broadcaster.sendTransform(transform)
 
         # Broadcast last known transforms even if we lose AprilTags
         if self.tf_camera_to_workspace1_raw is not None:
