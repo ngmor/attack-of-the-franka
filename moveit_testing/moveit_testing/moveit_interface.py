@@ -469,6 +469,7 @@ class MoveIt():
         if self._plan_state == _PlanState.START_IK_COMPUTE:
             if new_plan_state:
                 # Trigger compute IK once at start of state
+                self._node.get_logger().info(f"start pose: {self._start_pose}")
                 self._ik_request(self._joint_states, self._start_pose)
                 
             # wait for IK to finish
@@ -526,6 +527,7 @@ class MoveIt():
             # if self._move_action_client.server_is_ready(), then move to start
             if self._move_action_client.server_is_ready():
                 # send the goal plan through the move action client
+                self._node.get_logger().info("wat")
                 self._plan_future = \
                     self._move_action_client.send_goal_async(self._assemble_plan_message(self._attached_obstacles))
                 self._plan_state = _PlanState.WAIT_FOR_PLAN_ACK
@@ -549,30 +551,35 @@ class MoveIt():
                     self._node.get_logger().error(
                         "Plan result returned an error code other than SUCCESS(1)")
                     self._node.get_logger().error(f'Plan error code: {self._plan.error_code.val}')
-                    if self._plan.error_code.val == -4:
-                        self._start_joint_states = self._joint_states
-                        self._error = MoveItApiErrors.CONTROL_ERROR
-                        self._node.get_logger().error(f"Control error {self._error}")
-                        # self._plan_future = \
-                        # self._move_action_client.send_goal_async(self._assemble_plan_message(self._attached_obstacles))
-                        # if self._plan_future.done():
-                        #     self._error = MoveItApiErrors.NO_ERROR
-                        self._start_joint_states = self._joint_states
-                        self._start_pose = None
+                    # if self._plan.error_code.val == -4:
+                    #     self._start_joint_states = self._joint_states
+                    #     self._error = MoveItApiErrors.CONTROL_ERROR
+                    #     self._node.get_logger().error(f"Control error {self._error}")
+                    #     # self._plan_future = \
+                    #     # self._move_action_client.send_goal_async(self._assemble_plan_message(self._attached_obstacles))
+                    #     # if self._plan_future.done():
+                    #     #     self._error = MoveItApiErrors.NO_ERROR
+                    #     self._start_joint_states = self._joint_states
+                    #     self._node.get_logger().info(f'joint states:: {self._joint_states}')
 
-                        self._goal_joint_states = copy.deepcopy(self._joint_states)
-                        self._goal_joint_states.position = copy.deepcopy(self.config.home_joint_positions)
-
-                        self._plan_state = _PlanState.IDLE
-                        self._state = _State.PLANNING
-                        self._node.get_logger().error(f"State {self._state}")
+                    #     # if self._start_pose is None:
+                    #     #     self._plan_state = _PlanState.START_IK_COMPUTE
+                    #     # else:
+                    #     #     self._plan_state = _PlanState.WAIT_FOR_READY
+                    #     self.reset_robot_state()
+                    #     if self._move_to_home:
+                    #         self.move_to_home()
+                    #     # self._state = _State.PLANNING
+                    #     self._node.get_logger().error(f"State {self._state}")
+                    # else:
+                    #     self._state = _State.IDLE
                 else:
                     self._error = MoveItApiErrors.NO_ERROR
                     self._excecution_complete = 1
                 # go back to IDLE
-                    self._state = _State.IDLE
+            self._state = _State.IDLE
                 
-                self._node.get_logger().error(f"State {self._state}")
+            self._node.get_logger().error(f"State {self._state}")
 
     def _exec_sequence(self):
         """
@@ -874,6 +881,44 @@ class MoveIt():
 
         self._ik_start_sec = self._node.get_clock().now().seconds_nanoseconds()[0]
 
+    # def reset_robot_state(self):
+    #     assemble_msg = moveit_msgs.action.MoveGroup.Goal()
+
+    #     header = std_msgs.msg.Header()
+    #     header.frame_id = self.config.base_frame_id
+    #     header.stamp = self._node.get_clock().now().to_msg()
+
+    #     assemble_msg.request.workspace_parameters.header = header
+    #     assemble_msg.request.workspace_parameters.min_corner = self.config.workspace_min_corner
+    #     assemble_msg.request.workspace_parameters.max_corner = self.config.workspace_max_corner
+    #     assemble_msg.request.start_state.joint_state = self._start_joint_states
+    #     # assemble_msg.planning_options.planning_scene_diff.is_diff = True
+    #     self._node.get_logger().info(f"start joint states: {self._start_joint_states}")
+    #     assemble_msg.planning_options.planning_scene_diff.robot_state.is_diff = True
+    #     assemble_msg.planning_options.planning_scene_diff.robot_state.joint_state = self._start_joint_states
+    #     assemble_msg.request.goal_constraints = \
+    #         _joint_states_to_goal_constraints(self._goal_joint_states,
+    #                                           self.config.tolerance)
+
+    #     assemble_msg.request.pipeline_id = self.config.pipeline_id
+    #     assemble_msg.request.group_name = self.config.group_name
+    #     assemble_msg.request.num_planning_attempts = self.config.num_planning_attempts
+    #     assemble_msg.request.allowed_planning_time = self.config.allowed_planning_time
+    #     assemble_msg.request.max_velocity_scaling_factor = self.config.max_velocity_scaling_factor
+    #     assemble_msg.request.max_acceleration_scaling_factor = \
+    #         self.config.max_acceleration_scaling_factor
+
+    #     # obstacle avoidance
+    #     # assemble_msg.planning_options.planning_scene_diff.world.collision_objects = \
+    #     #     self.obstacles.world.collision_objects
+
+    #     assemble_msg.planning_options.plan_only = not self._plan_and_execute
+    #     if self._move_action_client.server_is_ready():
+    #         # send the goal plan through the move action client
+    #         self._node.get_logger().info("wat")
+    #         self._plan_future = \
+    #             self._move_action_client.send_goal_async(assemble_msg)
+
     def _assemble_plan_message(self, attached_collision_objects):
         """
         Generate plan request message from start position to goal pose.
@@ -897,10 +942,11 @@ class MoveIt():
         assemble_msg.request.workspace_parameters.min_corner = self.config.workspace_min_corner
         assemble_msg.request.workspace_parameters.max_corner = self.config.workspace_max_corner
         assemble_msg.request.start_state.joint_state = self._start_joint_states
+        # assemble_msg.planning_options.planning_scene_diff.is_diff = True
        # assemble_msg.request.start_state.attached_collision_objects = attached_collision_objects
        # assemble_msg.planning_options.planning_scene_diff.
        # assemble_msg.planning_options.planning_scene_diff.robot_state.attached_collision_objects = attached_collision_objects
-        
+
         if len(attached_collision_objects) >= 1:
             #acm = moveit_msgs.msg.AllowedCollisionMatrix()
             assemble_msg.request.start_state.is_diff = True

@@ -37,6 +37,7 @@ from attack_of_the_franka.common import FRAMES, angle_axis_to_quaternion, Object
 from rcl_interfaces.msg import ParameterDescriptor
 from attack_of_the_franka_interfaces.msg import Detections, DetectedObject
 from std_msgs.msg import Int16
+import time
 
 
 class State(Enum):
@@ -468,7 +469,7 @@ class RobotControl(Node):
             self.rotate = []
             self.waypoint_movements = []
             self.right_waypoint_movements = []
-            self.goal_waypoint = geometry_msgs.msg.Pose()
+            self.left_goal_waypoint = geometry_msgs.msg.Pose()
             self.right_goal_waypoint = geometry_msgs.msg.Pose()
             self.right_knock_enemy_waypoint = geometry_msgs.msg.Pose()
             if not self.moveit.busy:
@@ -482,44 +483,61 @@ class RobotControl(Node):
 
                         x_pos = self.detected_enemies[i].tf.transform.translation.x
                         y_pos = self.detected_enemies[i].tf.transform.translation.y
-                        height = self.detected_enemies[i].tf.transform.translation.z - self.table1_z
+                        if self.detected_enemies[i].tf.transform.translation.z < 0.1:
+                            height = 3*self.block_height/5
+                        else:
+                            height = self.detected_enemies[i].tf.transform.translation.z - self.table1_z
                         self.get_logger().info(f'height: {self.detected_enemies[i].tf.transform.translation.z}')
                         self.get_logger().info(f'table1 z: {self.table1_z}')
 
                         #left waypoint
-                        self.goal_waypoint.position.x = x_pos - (self.lightsaber_full_length*0.75)
-                        self.goal_waypoint.position.y = y_pos + 0.16            #adding slight offset (slightly more than half the block width)
-                        self.goal_waypoint.position.z = -self.table_offset + height + 0.1     #0.2
+                        self.left_goal_waypoint.position.x = x_pos - (self.lightsaber_full_length*0.75)
+                        self.left_goal_waypoint.position.y = y_pos + 0.16            #adding slight offset (slightly more than half the block width)
+                        self.left_goal_waypoint.position.z = -self.table_offset + height + 0.1
                         self.get_logger().info(f'goal z: {self.goal_waypoint.position.z}')
-                        self.goal_waypoint.orientation.x = math.pi
-                        self.goal_waypoint.orientation.z = -math.pi/16
+                        self.left_goal_waypoint.orientation.x = math.pi
+                        self.left_goal_waypoint.orientation.z = -math.pi/16
 
-                        self.knock_enemy_waypoint = geometry_msgs.msg.Pose()
-                        self.knock_enemy_waypoint.position.x = x_pos - (self.lightsaber_full_length*0.75)
-                        self.knock_enemy_waypoint.position.y = y_pos            #adding slight offset (slightly more than half the block width)
-                        self.knock_enemy_waypoint.position.z = -self.table_offset + height + 0.1
-                        self.knock_enemy_waypoint.orientation.x = math.pi
-                        self.knock_enemy_waypoint.orientation.z = -math.pi/16
+                        self.left_knock_enemy_waypoint = geometry_msgs.msg.Pose()
+                        self.left_knock_enemy_waypoint.position.x = x_pos - (self.lightsaber_full_length*0.75)
+                        self.left_knock_enemy_waypoint.position.y = y_pos            #adding slight offset (slightly more than half the block width)
+                        self.left_knock_enemy_waypoint.position.z = -self.table_offset + height + 0.1
+                        self.left_knock_enemy_waypoint.orientation.x = math.pi
+                        self.left_knock_enemy_waypoint.orientation.z = -math.pi/16
+
+                        self.left_reverse_enemy_waypoint = geometry_msgs.msg.Pose()
+                        self.left_reverse_enemy_waypoint.position.x = x_pos - (self.lightsaber_full_length*0.75)
+                        self.left_reverse_enemy_waypoint.position.y = y_pos + 0.16           #adding slight offset (slightly more than half the block width)
+                        self.left_reverse_enemy_waypoint.position.z = -self.table_offset + height + 0.1
+                        self.left_reverse_enemy_waypoint.orientation.x = math.pi
+                        self.left_reverse_enemy_waypoint.orientation.z = -math.pi/16
 
                         #right waypoint
                         self.right_goal_waypoint.position.x = x_pos - (self.lightsaber_full_length*0.75)
                         self.right_goal_waypoint.position.y = y_pos - 0.16            #adding slight offset (slightly more than half the block width)
-                        self.right_goal_waypoint.position.z = -self.table_offset + height + 0.1     #0.2
+                        self.right_goal_waypoint.position.z = -self.table_offset + height + 0.1 
                         self.get_logger().info(f'goal z: {self.right_goal_waypoint.position.z}')
                         self.right_goal_waypoint.orientation.x = math.pi
                         self.right_goal_waypoint.orientation.z = -math.pi/16
 
                         self.right_knock_enemy_waypoint = geometry_msgs.msg.Pose()
                         self.right_knock_enemy_waypoint.position.x = x_pos - (self.lightsaber_full_length*0.75)
-                        self.right_knock_enemy_waypoint.position.y = y_pos #- 0.0725            #adding slight offset (slightly more than half the block width)
+                        self.right_knock_enemy_waypoint.position.y = y_pos           #adding slight offset (slightly more than half the block width)
                         self.right_knock_enemy_waypoint.position.z = -self.table_offset + height + 0.1
                         self.right_knock_enemy_waypoint.orientation.x = math.pi
                         self.right_knock_enemy_waypoint.orientation.z = -math.pi/16
 
+                        self.right_reverse_enemy_waypoint = geometry_msgs.msg.Pose()
+                        self.right_reverse_enemy_waypoint.position.x = x_pos - (self.lightsaber_full_length*0.75)
+                        self.right_reverse_enemy_waypoint.position.y = y_pos - 0.16           #adding slight offset (slightly more than half the block width)
+                        self.right_reverse_enemy_waypoint.position.z = -self.table_offset + height + 0.1
+                        self.right_reverse_enemy_waypoint.orientation.x = math.pi
+                        self.right_reverse_enemy_waypoint.orientation.z = -math.pi/16
+
 
                         self.get_logger().info("adding waypoints")
-                        self.waypoint_movements.append([self.goal_waypoint, self.knock_enemy_waypoint])
-                        self.right_waypoint_movements.append([self.right_goal_waypoint, self.right_knock_enemy_waypoint])
+                        self.waypoint_movements.append([self.left_goal_waypoint, self.left_knock_enemy_waypoint, self.left_reverse_enemy_waypoint])
+                        self.right_waypoint_movements.append([self.right_goal_waypoint, self.right_knock_enemy_waypoint, self.right_reverse_enemy_waypoint])
                         self.num_movements = len(self.waypoint_movements[0])
                         self.get_logger().info(f'num movements: {self.num_movements}')
                         ####################
@@ -556,7 +574,7 @@ class RobotControl(Node):
                         # self.get_logger().info(f'at index num_waypoints, num_moves: {self.num_waypoints_completed}, {self.num_moves_completed}')
                         self.moveit.plan_traj_to_pose(self.waypoint_movements[self.num_waypoints_completed][self.num_moves_completed])
                         self.num_moves_completed += 1
-                        if self.num_moves_completed % 2 == 0:
+                        if self.num_moves_completed % self.num_movements == 0:
                             self.num_waypoints_completed += 1
                     except:
                         self.get_logger().info("back to idle!")
@@ -585,7 +603,7 @@ class RobotControl(Node):
                         # self.get_logger().info(f'at index num_waypoints, num_moves: {self.num_waypoints_completed}, {self.num_moves_completed}')
                         self.moveit.plan_traj_to_pose(self.right_waypoint_movements[self.num_waypoints_completed][self.num_moves_completed])
                         self.num_moves_completed += 1
-                        if self.num_moves_completed % 2 == 0:
+                        if self.num_moves_completed % self.num_movements == 0:
                             self.num_waypoints_completed += 1
                     except:
                         self.get_logger().info("back to idle!")
@@ -839,6 +857,7 @@ class RobotControl(Node):
 
            # once we're not executing anymore, return to IDLE
             if not self.moveit.busy:
+                time.sleep(2)
                 self.get_logger().info(f'num movements: {self.num_movements}')
                 self.get_logger().info(f'num moves completed: {self.num_moves_completed}')
                 self.get_logger().info(f'FUCK!!!!')
@@ -853,6 +872,8 @@ class RobotControl(Node):
                 else:
                     self.get_logger().info("done!")
                     all_transforms_found = self.update_detected_objects(ObjectType.ENEMY)
+                    self.is_stab_motion = False
+                    self.sign = 1
                     if all_transforms_found:
                         self.enemies_after = len(self.detected_enemies)
                         self.state = State.MOVE_TO_HOME_START
