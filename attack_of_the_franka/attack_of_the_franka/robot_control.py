@@ -187,7 +187,7 @@ class RobotControl(Node):
         self.tf_obj_listener = TransformListener(self.tf_buffer, self)
 
         # Control parameters
-        self.declare_parameter("simulation", True,
+        self.declare_parameter("simulation", False,
                                ParameterDescriptor(description="Whether the robot is being run in simulation"))
         self.simulation = self.get_parameter("simulation").get_parameter_value().bool_value
 
@@ -895,10 +895,16 @@ class RobotControl(Node):
                     self.pickup_lightsaber_state = PickupLightsaberState.OPEN_START
 
         elif self.pickup_lightsaber_state == PickupLightsaberState.OPEN_START:
-            self.pickup_lightsaber_future = self.open_gripper()
+            if new_state:
+                self.pickup_lightsaber_future = None
 
-            if self.pickup_lightsaber_future is not None:
-                self.pickup_lightsaber_state = PickupLightsaberState.OPEN_WAIT
+            if self.pickup_lightsaber_future is None:
+                self.pickup_lightsaber_future = self.open_gripper()
+
+            elif self.pickup_lightsaber_future is not None:
+                if self.pickup_lightsaber_future.done():
+                    self.pickup_lightsaber_future = self.pickup_lightsaber_future.result().get_result_async()
+                    self.pickup_lightsaber_state = PickupLightsaberState.OPEN_WAIT
 
         elif self.pickup_lightsaber_state == PickupLightsaberState.OPEN_WAIT:
             if self.pickup_lightsaber_future.done():
@@ -962,10 +968,16 @@ class RobotControl(Node):
                     self.pickup_lightsaber_state = PickupLightsaberState.GRASP_START
 
         elif self.pickup_lightsaber_state == PickupLightsaberState.GRASP_START:
-            self.pickup_lightsaber_future = self.grasp()
+            if new_state:
+                self.pickup_lightsaber_future = None
 
-            if self.pickup_lightsaber_future is not None:
-                self.pickup_lightsaber_state = PickupLightsaberState.GRASP_WAIT
+            if self.pickup_lightsaber_future is None:
+                self.pickup_lightsaber_future = self.grasp()
+
+            elif self.pickup_lightsaber_future is not None:
+                if self.pickup_lightsaber_future.done():
+                    self.pickup_lightsaber_future = self.pickup_lightsaber_future.result().get_result_async()
+                    self.pickup_lightsaber_state = PickupLightsaberState.GRASP_WAIT
 
         elif self.pickup_lightsaber_state == PickupLightsaberState.GRASP_WAIT:
             if self.pickup_lightsaber_future.done():
