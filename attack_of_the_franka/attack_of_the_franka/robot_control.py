@@ -1807,10 +1807,25 @@ class RobotControl(Node):
 
     def check_ally_danger_fall(self, enemy_obj, swing_style):
         """
-        
+        Checks the targeted enemy block's surroundings for ally blocks that are at risk of being knocked 
+        over by the enemy block's fall.
+
+        Args:
+            enemy_obj:  specifies the enemy whose fall trajectory is being checked 
+            swing_style:   specifies which attack syle to check danger for
+                                0 - left attack (brick would fall towards the right from desk view)
+                                1 - right attack (brick would fall towards the right from desk view)
+                                2 - stabbing attack (brick would fall towards command desk)
+
+        Returns
+        -------
+            bool:   returns false if there is an ally in the 'danger zone' of the fall and
+                        true if it is safe to make the move
+
         """
         # y is left to right
         # x is forward to backward
+        # checks if within width of the block since we only get centroid and don't know the block's orientation
         enemy_to_ally = DetectedObjectData(enemy_obj)
         for ally in self.detected_allies:
             self.get_logger().info(f'seeing {len(self.detected_allies)} allies on field')
