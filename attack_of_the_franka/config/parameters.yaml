@@ -31,3 +31,6 @@
     depth_filter:
       min_offset: 0.075 # m
       max_offset: 0.5 # m
+    speeds:
+      default: 0.3
+      pickup_lightsaber: 0.1

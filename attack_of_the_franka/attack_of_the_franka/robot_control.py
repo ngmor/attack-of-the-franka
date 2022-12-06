@@ -247,6 +247,12 @@ class RobotControl(Node):
         self.declare_parameter("gripper.tcp_offset", 0.036,
                                ParameterDescriptor(description="offset of gripper from panda_hand_tcp_frame"))
         self.gripper_tcp_offset = self.get_parameter("gripper.tcp_offset").get_parameter_value().double_value
+        self.declare_parameter("speeds.default", 0.3,
+                               ParameterDescriptor(description="Default speed limit multiplier"))
+        self.default_speed = self.get_parameter("speeds.default").get_parameter_value().double_value
+        self.declare_parameter("speeds.pickup_lightsaber_speed", 0.1,
+                               ParameterDescriptor(description="Pickup lightsaber speed limit multiplier"))
+        self.pickup_lightsaber_speed = self.get_parameter("speeds.pickup_lightsaber_speed").get_parameter_value().double_value
         
         
         self.table_offset = 0.091 # TODO - fix hardcoding?
@@ -265,7 +271,7 @@ class RobotControl(Node):
             z=3.0
         )
         self.config.tolerance = 0.01
-        self.config.max_velocity_scaling_factor = 0.3
+        self.config.max_velocity_scaling_factor = self.default_speed
         self.config.group_name = 'panda_manipulator'
 
         self.home_pose = geometry_msgs.msg.Pose()
@@ -767,6 +773,8 @@ class RobotControl(Node):
             # Execute subsequence to pickup the lightsaber
             # this method returns true if the subsequence is complete, false if not
             if self.pickup_lightsaber_sequence():
+                self.config.max_velocity_scaling_factor = self.default_speed
+
                 # Return to IDLE
                 self.state = State.IDLE
 
@@ -871,6 +879,9 @@ class RobotControl(Node):
             self.pickup_lightsaber_state_last = self.pickup_lightsaber_state
 
         if self.pickup_lightsaber_state == PickupLightsaberState.ADD_SEPARATE_COLLISION_START:
+            
+            self.config.max_velocity_scaling_factor = self.pickup_lightsaber_speed
+
             if self.moveit.busy_updating_obstacles:
                 self.pickup_lightsaber_state = PickupLightsaberState.ADD_SEPARATE_COLLISION_WAIT
             else:
