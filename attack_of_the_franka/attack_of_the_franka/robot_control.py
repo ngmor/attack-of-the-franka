@@ -62,7 +62,35 @@ class State(Enum):
     LEFT_DYNAMIC_MOTION = auto(),
     RIGHT_DYNAMIC_MOTION = auto(),
     STAB_MOTION = auto(),
-    ENEMIES_KILLED_COUNT = auto()
+    PICKUP_LIGHTSABER = auto(),
+
+class PickupLightsaberState(Enum):
+    """State machine for lightsaber pickup subsequence."""
+
+    REMOVE_ATTACHED_COLLISION_START = auto(),
+    REMOVE_ATTACHED_COLLISION_WAIT = auto()
+    ADD_SEPARATE_COLLISION_START = auto(),
+    ADD_SEPARATE_COLLISION_WAIT = auto(),
+    MOVE_TO_HOME_START = auto(),
+    MOVE_TO_HOME_WAIT = auto(),
+    OPEN_START = auto(),
+    OPEN_WAIT = auto(),
+    MOVE_TO_LIGHTSABER_STANDOFF_START = auto(),
+    MOVE_TO_LIGHTSABER_STANDOFF_WAIT = auto(),
+    REMOVE_SEPARATE_COLLISION_START = auto(),
+    REMOVE_SEPARATE_COLLISION_WAIT = auto(),
+    MOVE_TO_LIGHTSABER_PICK_START = auto(),
+    MOVE_TO_LIGHTSABER_PICK_WAIT = auto(),
+    GRASP_START = auto(),
+    GRASP_WAIT = auto(),
+    ADD_ATTACHED_COLLISION_START = auto(),
+    ADD_ATTACHED_COLLISION_WAIT = auto()
+    DRAW_START = auto(),
+    DRAW_WAIT = auto(),
+    RETURN_TO_HOME_START = auto(),
+    RETURN_TO_HOME_WAIT = auto(),
+
+
 
 class DetectedObjectData():
 
@@ -97,9 +125,12 @@ class RobotControl(Node):
         self.sub_obj_detections = self.create_subscription(Detections,'object_detections',self.obj_detection_callback,10)
         self.srv_move_to_home = self.create_service(std_srvs.srv.Empty,
                                                     'move_to_home', self.move_to_home_callback)
-        self.grip_open_close = self.create_service(std_srvs.srv.Empty,
-                                                    'grip_open_close',
-                                                    self.grip_open_close_callback)
+        self.srv_gripper_open = self.create_service(std_srvs.srv.Empty,
+                                                    'gripper_open',
+                                                    self.gripper_open_callback)
+        self.srv_gripper_close = self.create_service(std_srvs.srv.Empty,
+                                                    'gripper_close',
+                                                    self.gripper_close_callback)
         self.gripper_grasp = self.create_service(std_srvs.srv.Empty,
                                                     'gripper_grasp', self.gripper_grasp_callback)
         self.waypoints = self.create_service(std_srvs.srv.Empty,
@@ -126,7 +157,9 @@ class RobotControl(Node):
         self.srv_grippers = self.create_service(
             moveit_msgs.srv.GraspPlanning,
             'grasp_plan', self.gripper_callback)
-        self.pickup_action_client = ActionClient(self, control_msgs.action.GripperCommand,
+        self.srv_pickup_lightsaber = self.create_service(std_srvs.srv.Empty, 'pickup_lightsaber',
+                                                         self.pickup_lightsaber_callback)
+        self.gripper_action_client = ActionClient(self, control_msgs.action.GripperCommand,
                                          'panda_gripper/gripper_action')
         
         self.test_followjoints = ActionClient(self, control_msgs.action.FollowJointTrajectory,
@@ -145,6 +178,14 @@ class RobotControl(Node):
                                                      self.home_waypoint_callback)
         self.srv_add_walls = self.create_service(std_srvs.srv.Empty,
                                                 'add_walls', self.add_walls_callback)
+        self.srv_remove_separate_lightsaber = self.create_service(std_srvs.srv.Empty,
+            'remove_separate_lightsaber', self.remove_separate_lightsaber_callback)
+        self.srv_add_separate_lightsaber = self.create_service(std_srvs.srv.Empty,
+            'add_separate_lightsaber', self.add_separate_lightsaber_callback)
+        self.srv_remove_attached_lightsaber = self.create_service(std_srvs.srv.Empty,
+            'remove_attached_lightsaber', self.remove_attached_lightsaber_callback)
+        self.srv_add_attached_lightsaber = self.create_service(std_srvs.srv.Empty,
+            'add_attached_lightsaber', self.add_attached_lightsaber_callback)
         self.look_for_enemy_srv = self.create_service(std_srvs.srv.Empty,
                                                     'look_for_enemy',
                                                     self.look_for_enemy_callback)
@@ -153,7 +194,12 @@ class RobotControl(Node):
         self.tf_buffer = Buffer()
         self.tf_obj_listener = TransformListener(self.tf_buffer, self)
 
-         # Dimension parameters
+        # Control parameters
+        self.declare_parameter("simulation", False,
+                               ParameterDescriptor(description="Whether the robot is being run in simulation"))
+        self.simulation = self.get_parameter("simulation").get_parameter_value().bool_value
+
+        # Dimension parameters
         self.declare_parameter("robot_table.width", 0.605,
                                ParameterDescriptor(description="Robot table width"))
         self.robot_table_width = self.get_parameter("robot_table.width").get_parameter_value().double_value
@@ -178,16 +224,47 @@ class RobotControl(Node):
         self.declare_parameter("back_wall.height", 0.46,
                                ParameterDescriptor(description="Back wall height from floor"))
         self.back_wall_height = self.get_parameter("back_wall.height").get_parameter_value().double_value
+        self.declare_parameter("lightsaber.diameter", 0.033,
+                               ParameterDescriptor(description="Lightsaber diameter"))
+        self.lightsaber_diameter = self.get_parameter("lightsaber.diameter").get_parameter_value().double_value
         self.declare_parameter("lightsaber.full_length", 1.122,
                                ParameterDescriptor(description="Lightsaber full length"))
         self.lightsaber_full_length = self.get_parameter("lightsaber.full_length").get_parameter_value().double_value
         self.declare_parameter("lightsaber.grip_offset", 0.15,
                                ParameterDescriptor(description="Lightsaber grip offset"))
         self.lightsaber_grip_offset = self.get_parameter("lightsaber.grip_offset").get_parameter_value().double_value
-        self.declare_parameter("lightsaber.gripper_height", 0.08,
-                               ParameterDescriptor(description="Lightsaber gripper height"))
-        self.lightsaber_gripper_height = self.get_parameter("lightsaber.gripper_height").get_parameter_value().double_value
-        self.table_offset = 0.091
+        self.declare_parameter("lightsaber.start_location.x", 0.,
+                               ParameterDescriptor(description="Lightsaber initial location x"))
+        self.declare_parameter("lightsaber.start_location.y", 0.,
+                               ParameterDescriptor(description="Lightsaber initial location y"))
+        self.declare_parameter("lightsaber.start_location.z", 0.,
+                               ParameterDescriptor(description="Lightsaber initial location z"))
+        self.lightsaber_start_location = geometry_msgs.msg.Point()
+        self.lightsaber_start_location.x = self.get_parameter("lightsaber.start_location.x").get_parameter_value().double_value
+        self.lightsaber_start_location.y = self.get_parameter("lightsaber.start_location.y").get_parameter_value().double_value
+        self.lightsaber_start_location.z = self.get_parameter("lightsaber.start_location.z").get_parameter_value().double_value
+        self.declare_parameter("lightsaber.lift_height", 0.25,
+                               ParameterDescriptor(description="Height to lift lightsaber out of its sheath"))
+        self.lightsaber_lift_height = self.get_parameter("lightsaber.lift_height").get_parameter_value().double_value
+        self.declare_parameter("gripper.height", 0.08,
+                               ParameterDescriptor(description="height of Franka attached gripper to avoid collisions"))
+        self.gripper_height = self.get_parameter("gripper.height").get_parameter_value().double_value
+        self.declare_parameter("gripper.tcp_offset", 0.036,
+                               ParameterDescriptor(description="offset of gripper from panda_hand_tcp_frame"))
+        self.gripper_tcp_offset = self.get_parameter("gripper.tcp_offset").get_parameter_value().double_value
+        self.declare_parameter("speeds.default", 0.3,
+                               ParameterDescriptor(description="Default speed limit multiplier"))
+        self.default_speed = self.get_parameter("speeds.default").get_parameter_value().double_value
+        self.declare_parameter("speeds.pickup_lightsaber_speed_slow", 0.1,
+                               ParameterDescriptor(description="Pickup lightsaber speed slow limit multiplier"))
+        self.pickup_lightsaber_speed_slow = self.get_parameter("speeds.pickup_lightsaber_speed_slow").get_parameter_value().double_value
+        self.declare_parameter("speeds.pickup_lightsaber_speed_fast", 0.3,
+                               ParameterDescriptor(description="Pickup lightsaber speed fast limit multiplier"))
+        self.pickup_lightsaber_speed_fast = self.get_parameter("speeds.pickup_lightsaber_speed_fast").get_parameter_value().double_value
+        
+        
+        self.table_offset = 0.091 # TODO - fix hardcoding?
+
         # Initialize API class
         self.config = MoveConfig()
         self.config.base_frame_id = 'panda_link0'
@@ -202,7 +279,7 @@ class RobotControl(Node):
             z=3.0
         )
         self.config.tolerance = 0.01
-        self.config.max_velocity_scaling_factor = 0.3
+        self.config.max_velocity_scaling_factor = self.default_speed
         self.config.group_name = 'panda_manipulator'
 
         self.home_pose = geometry_msgs.msg.Pose()
@@ -252,10 +329,10 @@ class RobotControl(Node):
         self.goal_waypoint = geometry_msgs.msg.Pose()
         self.plan = None
 
-        # self.state = State.IDLE
         self.state = State.IDLE
-
-        self.grip = 0
+        self.state_last = None
+        self.pickup_lightsaber_state = PickupLightsaberState.REMOVE_ATTACHED_COLLISION_START
+        self.pickup_lightsaber_state_last = None
 
         self.joint_traj = trajectory_msgs.msg.JointTrajectory()
 
@@ -328,14 +405,31 @@ class RobotControl(Node):
         grip_msg = control_msgs.action.GripperCommand.Goal()
         grip_msg.command.position = 0.0 #0.01
         grip_msg.command.max_effort = 60.0
-        if self.pickup_action_client.server_is_ready():
-            self.pickup_action_client.send_goal_async(grip_msg)
+        if self.gripper_action_client.server_is_ready():
+            self.gripper_action_client.send_goal_async(grip_msg)
+        else:
+            return None
     
     def open_gripper(self):
         grip_msg = control_msgs.action.GripperCommand.Goal()
         grip_msg.command.position = 0.03    #0.04
-        if self.pickup_action_client.server_is_ready():
-            self.pickup_action_client.send_goal_async(grip_msg)
+        if self.gripper_action_client.server_is_ready():
+            return self.gripper_action_client.send_goal_async(grip_msg)
+        else:
+            return None
+
+    def grasp(self):
+        if self.grip_lightsaber_client.server_is_ready():
+            grip_goal = franka_msgs.action.Grasp.Goal()
+            grip_goal.width = 0.00 #0.033
+            grip_goal.epsilon.inner = 0.005
+            grip_goal.epsilon.outer = 0.005
+            grip_goal.speed = 0.03
+            grip_goal.force = 80.0
+            return self.grip_lightsaber_client.send_goal_async(grip_goal)
+        else:
+            return None
+        
 
     def find_allies(self):
         all_transforms_found = self.update_detected_objects(ObjectType.ALLY)
@@ -382,6 +476,13 @@ class RobotControl(Node):
 
         self.find_allies()
 
+        new_state = self.state != self.state_last
+
+        if new_state:
+            self.get_logger().info(
+                f"robot_control main sequence changed to {self.state.name}")
+            self.state_last = self.state
+
         # State machine
         if self.state == State.MOVE_TO_HOME_START:
 
@@ -425,7 +526,7 @@ class RobotControl(Node):
                 self.table_center_y = (table1.transform.translation.y + table2.transform.translation.y)/2
 
                 self.add_walls()
-                self.add_lightsaber()
+                self.add_attached_lightsaber()
                 self.obstacles_added = 1
                 self.state = State.LOOK_FOR_ENEMY
 
@@ -786,6 +887,21 @@ class RobotControl(Node):
                 self.get_logger().info("next waypoint!")
                 self.state = State.WAYPOINTS
 
+        # Draw waypoints
+        elif self.state == State.PICKUP_LIGHTSABER:
+
+            # reset subsequence on first callback of PICKUP_LIGHTSABER state
+            if new_state:
+                self.pickup_lightsaber_state = PickupLightsaberState.REMOVE_ATTACHED_COLLISION_START
+
+            # Execute subsequence to pickup the lightsaber
+            # this method returns true if the subsequence is complete, false if not
+            if self.pickup_lightsaber_sequence():
+                self.config.max_velocity_scaling_factor = self.default_speed
+
+                # Return to IDLE
+                self.state = State.IDLE
+
         elif self.state == State.PLAN_TO_POSE_START:
 
             # if self.waypoints == 1:
@@ -883,7 +999,201 @@ class RobotControl(Node):
 
         self.dead_count_pub.publish(Int16(data=self.dead_enemy_count))
 
+    def pickup_lightsaber_sequence(self):
+        """TODO"""
 
+        done = False
+
+        new_state = self.pickup_lightsaber_state != self.pickup_lightsaber_state_last
+
+        if new_state:
+            self.get_logger().info(f"Pickup lightsaber sequence changed to {self.pickup_lightsaber_state.name}")
+            self.pickup_lightsaber_state_last = self.pickup_lightsaber_state
+
+
+        if self.pickup_lightsaber_state == PickupLightsaberState.REMOVE_ATTACHED_COLLISION_START:
+            if self.moveit.busy_updating_obstacles:
+                self.pickup_lightsaber_state = PickupLightsaberState.REMOVE_ATTACHED_COLLISION_WAIT
+            else:
+                self.remove_attached_lightsaber()
+
+        elif self.pickup_lightsaber_state == PickupLightsaberState.REMOVE_ATTACHED_COLLISION_WAIT:
+            if not self.moveit.busy_updating_obstacles:
+                self.pickup_lightsaber_state = PickupLightsaberState.ADD_SEPARATE_COLLISION_START
+
+        elif self.pickup_lightsaber_state == PickupLightsaberState.ADD_SEPARATE_COLLISION_START:
+            
+            self.config.max_velocity_scaling_factor = self.pickup_lightsaber_speed_fast
+
+            if self.moveit.busy_updating_obstacles:
+                self.pickup_lightsaber_state = PickupLightsaberState.ADD_SEPARATE_COLLISION_WAIT
+            else:
+                self.add_separate_lightsaber()
+        
+        if self.pickup_lightsaber_state == PickupLightsaberState.ADD_SEPARATE_COLLISION_WAIT:
+            if not self.moveit.busy_updating_obstacles:
+                self.pickup_lightsaber_state = PickupLightsaberState.MOVE_TO_HOME_START
+
+        elif self.pickup_lightsaber_state == PickupLightsaberState.MOVE_TO_HOME_START:
+            if self.moveit.planning:
+                self.pickup_lightsaber_state = PickupLightsaberState.MOVE_TO_HOME_WAIT
+            else:
+                self.moveit.move_to_home()
+
+        elif self.pickup_lightsaber_state == PickupLightsaberState.MOVE_TO_HOME_WAIT:
+            if not self.moveit.busy:
+
+                # Skip gripper actions in simulation since action server is not available
+                if self.simulation:
+                    self.pickup_lightsaber_state = PickupLightsaberState.MOVE_TO_LIGHTSABER_STANDOFF_START
+                else:
+                    self.pickup_lightsaber_state = PickupLightsaberState.OPEN_START
+
+        elif self.pickup_lightsaber_state == PickupLightsaberState.OPEN_START:
+            if new_state:
+                self.pickup_lightsaber_future = None
+
+            if self.pickup_lightsaber_future is None:
+                self.pickup_lightsaber_future = self.open_gripper()
+
+            elif self.pickup_lightsaber_future is not None:
+                if self.pickup_lightsaber_future.done():
+                    self.pickup_lightsaber_future = self.pickup_lightsaber_future.result().get_result_async()
+                    self.pickup_lightsaber_state = PickupLightsaberState.OPEN_WAIT
+
+        elif self.pickup_lightsaber_state == PickupLightsaberState.OPEN_WAIT:
+            if self.pickup_lightsaber_future.done():
+                self.pickup_lightsaber_state = PickupLightsaberState.MOVE_TO_LIGHTSABER_STANDOFF_START
+
+        elif self.pickup_lightsaber_state == PickupLightsaberState.MOVE_TO_LIGHTSABER_STANDOFF_START:
+            if self.moveit.planning:
+                self.pickup_lightsaber_state = PickupLightsaberState.MOVE_TO_LIGHTSABER_STANDOFF_WAIT
+            else:
+                pose = geometry_msgs.msg.Pose()
+                pose.position.x = self.lightsaber_start_location.x
+                pose.position.y = self.lightsaber_start_location.y + \
+                                  self.gripper_height * 2.
+                pose.position.z = self.lightsaber_start_location.z + \
+                                  self.lightsaber_full_length / 2. - \
+                                  self.lightsaber_grip_offset
+                pose.orientation.x = 0.5
+                pose.orientation.y = 0.5
+                pose.orientation.z = -0.5
+                pose.orientation.w =  0.5
+                self.moveit.plan_traj_to_pose(pose, execute=True)
+
+        elif self.pickup_lightsaber_state == PickupLightsaberState.MOVE_TO_LIGHTSABER_STANDOFF_WAIT:
+            if not self.moveit.busy:
+                self.pickup_lightsaber_state = PickupLightsaberState.REMOVE_SEPARATE_COLLISION_START
+
+        elif self.pickup_lightsaber_state == PickupLightsaberState.REMOVE_SEPARATE_COLLISION_START:
+            if self.moveit.busy_updating_obstacles:
+                self.pickup_lightsaber_state = PickupLightsaberState.REMOVE_SEPARATE_COLLISION_WAIT
+            else:
+                self.remove_separate_lightsaber()
+
+        elif self.pickup_lightsaber_state == PickupLightsaberState.REMOVE_SEPARATE_COLLISION_WAIT:
+            if not self.moveit.busy_updating_obstacles:
+                self.pickup_lightsaber_state = PickupLightsaberState.MOVE_TO_LIGHTSABER_PICK_START
+
+        elif self.pickup_lightsaber_state == PickupLightsaberState.MOVE_TO_LIGHTSABER_PICK_START:
+            self.config.max_velocity_scaling_factor = self.pickup_lightsaber_speed_slow
+
+            if self.moveit.planning:
+                self.pickup_lightsaber_state = PickupLightsaberState.MOVE_TO_LIGHTSABER_PICK_WAIT
+            else:
+                pose = geometry_msgs.msg.Pose()
+                pose.position.x = self.lightsaber_start_location.x
+                pose.position.y = self.lightsaber_start_location.y + \
+                                  self.gripper_tcp_offset
+                pose.position.z = self.lightsaber_start_location.z + \
+                                  self.lightsaber_full_length / 2. - \
+                                  self.lightsaber_grip_offset
+                pose.orientation.x = 0.5
+                pose.orientation.y = 0.5
+                pose.orientation.z = -0.5
+                pose.orientation.w =  0.5
+                self.moveit.plan_traj_to_pose(pose, execute=True)
+
+        elif self.pickup_lightsaber_state == PickupLightsaberState.MOVE_TO_LIGHTSABER_PICK_WAIT:
+            if not self.moveit.busy:
+
+                # Skip gripper actions in simulation since action server is not available
+                if self.simulation:
+                    self.pickup_lightsaber_state = PickupLightsaberState.ADD_ATTACHED_COLLISION_START
+                else:
+                    self.pickup_lightsaber_state = PickupLightsaberState.GRASP_START
+
+        elif self.pickup_lightsaber_state == PickupLightsaberState.GRASP_START:
+            if new_state:
+                self.pickup_lightsaber_future = None
+
+            if self.pickup_lightsaber_future is None:
+                self.pickup_lightsaber_future = self.grasp()
+
+            elif self.pickup_lightsaber_future is not None:
+                if self.pickup_lightsaber_future.done():
+                    self.pickup_lightsaber_future = self.pickup_lightsaber_future.result().get_result_async()
+                    self.pickup_lightsaber_state = PickupLightsaberState.GRASP_WAIT
+
+        elif self.pickup_lightsaber_state == PickupLightsaberState.GRASP_WAIT:
+            if self.pickup_lightsaber_future.done():
+                self.pickup_lightsaber_state = PickupLightsaberState.ADD_ATTACHED_COLLISION_START
+
+        elif self.pickup_lightsaber_state == PickupLightsaberState.ADD_ATTACHED_COLLISION_START:
+            if self.moveit.busy_updating_obstacles:
+                self.pickup_lightsaber_state = PickupLightsaberState.ADD_ATTACHED_COLLISION_WAIT
+            else:
+                self.add_attached_lightsaber()
+
+        elif self.pickup_lightsaber_state == PickupLightsaberState.ADD_ATTACHED_COLLISION_WAIT:
+            if not self.moveit.busy_updating_obstacles:
+                self.pickup_lightsaber_state = PickupLightsaberState.DRAW_START
+
+        elif self.pickup_lightsaber_state == PickupLightsaberState.DRAW_START:
+            if self.moveit.planning:
+                self.pickup_lightsaber_state = PickupLightsaberState.DRAW_WAIT
+            else:
+                pose = geometry_msgs.msg.Pose()
+                pose.position.x = self.lightsaber_start_location.x
+                pose.position.y = self.lightsaber_start_location.y + \
+                                  self.gripper_tcp_offset
+                pose.position.z = self.lightsaber_start_location.z + \
+                                  self.lightsaber_full_length / 2. - \
+                                  self.lightsaber_grip_offset + \
+                                  (self.lightsaber_lift_height * 1.2)
+                pose.orientation.x = 0.5
+                pose.orientation.y = 0.5
+                pose.orientation.z = -0.5
+                pose.orientation.w =  0.5
+                self.moveit.plan_traj_to_pose(pose, execute=True)
+
+        elif self.pickup_lightsaber_state == PickupLightsaberState.DRAW_WAIT:
+            if not self.moveit.busy:
+                self.pickup_lightsaber_state = PickupLightsaberState.RETURN_TO_HOME_START
+
+        elif self.pickup_lightsaber_state == PickupLightsaberState.RETURN_TO_HOME_START:
+            self.config.max_velocity_scaling_factor = self.pickup_lightsaber_speed_fast
+
+            if self.moveit.planning:
+                self.pickup_lightsaber_state = PickupLightsaberState.RETURN_TO_HOME_WAIT
+            else:
+                self.moveit.move_to_home()
+
+        elif self.pickup_lightsaber_state == PickupLightsaberState.RETURN_TO_HOME_WAIT:
+            if not self.moveit.busy:
+                done = True
+
+
+        return done
+
+    def pickup_lightsaber_callback(self, request, response):
+        """Begin lightsaber subsequence if currently in IDLE."""
+
+        if self.state == State.IDLE:
+            self.state = State.PICKUP_LIGHTSABER
+
+        return response
 
     def move_to_home_callback(self, request, response):
         """
@@ -921,26 +1231,19 @@ class RobotControl(Node):
             self.num_waypoints_completed = 0
         return response
 
-    def grip_open_close_callback(self, request, response):
-        if self.grip == 0:
-            self.close_gripper()
-            self.grip = 1
-        elif self.grip == 1:
-            self.open_gripper()
-            self.grip = 0
+    def gripper_open_callback(self, request, response):
+        self.open_gripper()
+
+        return response
+
+    def gripper_close_callback(self, request, response):
+        self.close_gripper()
+
         return response
 
     def gripper_grasp_callback(self, request, response):
-        #Note: might need to command robot to stay up when holding lightsaber
-        self.grip_lightsaber_client.wait_for_server()
-        if self.grip_lightsaber_client.server_is_ready():
-            grip_goal = franka_msgs.action.Grasp.Goal()
-            grip_goal.width = 0.00 #0.033
-            grip_goal.epsilon.inner = 0.005
-            grip_goal.epsilon.outer = 0.005
-            grip_goal.speed = 0.03
-            grip_goal.force = 80.0
-            self.grip_lightsaber_client.send_goal_async(grip_goal)
+        self.grasp()
+
         return response
 
 
@@ -1404,34 +1707,93 @@ class RobotControl(Node):
 
         obstacle.header.frame_id = self.moveit.config.base_frame_id
 
-        self.moveit.update_persistent_obstacle(obstacle, delete=request.delete_obstacle)
+        self.moveit.update_obstacles([obstacle], delete=request.delete_obstacle)
 
         return response
 
-    def add_lightsaber(self):
+    def add_separate_lightsaber(self):
+        """Add lightsaber as a separate collision object."""
+
+        obstacle = moveit_msgs.msg.CollisionObject()
+        obstacle.id = 'lightsaber'
+
+        pose = geometry_msgs.msg.Pose()
+        pose.position = self.lightsaber_start_location
+        pose.orientation.z = -1.0
+
+        obstacle.primitive_poses = [pose]
+
+        shape = shape_msgs.msg.SolidPrimitive()
+        shape.type = 3  # Cylinder
+        shape.dimensions = [self.lightsaber_full_length, self.lightsaber_diameter, 0.2]
+        obstacle.primitives = [shape]
+
+        obstacle.header.frame_id = self.moveit.config.base_frame_id
+
+        self.moveit.update_obstacles([obstacle], delete=False)
+
+    def remove_separate_lightsaber(self):
+        """Remove lightsaber as a separate collision object."""
+
+        obstacle = moveit_msgs.msg.CollisionObject()
+        obstacle.id = 'lightsaber'
+
+        self.moveit.update_obstacles([obstacle], delete=True)
+
+
+    def add_attached_lightsaber(self):
+        """Add lightsaber as an attached collision object."""
         attached_obstacle = moveit_msgs.msg.AttachedCollisionObject()
         attached_obstacle.link_name = 'panda_hand_tcp'
         attached_obstacle.object.header.frame_id = 'panda_hand_tcp'
         attached_obstacle.object.header.stamp = self.get_clock().now().to_msg()
-        attached_obstacle.object.id = 'gripping'
+        attached_obstacle.object.id = 'lightsaber'
 
         pose = geometry_msgs.msg.Pose()
-        pose.position.x = 0.411
+        pose.position.x = self.lightsaber_full_length / 2. - self.lightsaber_grip_offset
         pose.position.y = 0.0
-        pose.position.z = 0.0
+        pose.position.z = self.gripper_tcp_offset
         pose.orientation.y = -1.0
         attached_obstacle.object.primitive_poses = [pose]
 
         shape = shape_msgs.msg.SolidPrimitive()
         shape.type = 3  # Cylinder
-        shape.dimensions = [1.125, 0.033, 0.2]
+        shape.dimensions = [self.lightsaber_full_length, self.lightsaber_diameter, 0.2]
         attached_obstacle.object.primitives = [shape]
 
         attached_obstacle.object.operation = attached_obstacle.object.ADD
 
         attached_obstacle.touch_links = ['panda_rightfinger', 'panda_leftfinger', 'panda_hand_tcp', 'panda_hand']
 
-        self.moveit.update_attached_obstacles(attached_obstacle, delete=False)
+        self.moveit.update_attached_obstacles([attached_obstacle], delete=False)
+
+    def remove_attached_lightsaber(self):
+        """Remove lightsaber as an attached collision object."""
+
+        attached_obstacle = moveit_msgs.msg.AttachedCollisionObject()
+        attached_obstacle.object.id = 'lightsaber'
+
+        self.moveit.update_attached_obstacles([attached_obstacle], delete=True)
+
+    def add_separate_lightsaber_callback(self, request,response):
+        self.add_separate_lightsaber()
+
+        return response
+
+    def remove_separate_lightsaber_callback(self, request,response):
+        self.remove_separate_lightsaber()
+
+        return response
+
+    def add_attached_lightsaber_callback(self, request,response):
+        self.add_attached_lightsaber()
+
+        return response
+
+    def remove_attached_lightsaber_callback(self, request,response):
+        self.remove_attached_lightsaber()
+
+        return response
 
     def attached_obstacles_callback(self, request, response):
         """
@@ -1471,7 +1833,7 @@ class RobotControl(Node):
 
         attached_obstacle.touch_links = ['panda_rightfinger', 'panda_leftfinger', 'panda_hand_tcp', 'panda_hand']
 
-        self.moveit.update_attached_obstacles(attached_obstacle, delete=request.delete_obstacle)
+        self.moveit.update_attached_obstacles([attached_obstacle], delete=request.delete_obstacle)
 
         return response
 
@@ -1491,7 +1853,6 @@ class RobotControl(Node):
         obstacle.primitives = [shape]
 
         obstacle.header.frame_id = self.moveit.config.base_frame_id
-        # self.moveit.update_persistent_obstacle(obstacle, delete=False)
 
         obstacle1 = moveit_msgs.msg.CollisionObject()
         obstacle1.id = 'wall_1'
@@ -1528,15 +1889,17 @@ class RobotControl(Node):
         obstacle3 = moveit_msgs.msg.CollisionObject()
         obstacle3.id = 'blocks_table'
 
+        table_size = self.robot_table_height - self.table_offset
+
         pose3 = geometry_msgs.msg.Pose()
         pose3.position.x = self.table_center_x 
         pose3.position.y = self.table_center_y 
-        pose3.position.z = -0.091
+        pose3.position.z = -self.robot_table_height + table_size / 2.
         obstacle3.primitive_poses = [pose3]
 
         shape3 = shape_msgs.msg.SolidPrimitive()
         shape3.type = 1  # Box
-        shape3.dimensions = [self.table_len_x, self.table_len_y, 0.023]
+        shape3.dimensions = [self.table_len_x, self.table_len_y, table_size] # 0.023
         obstacle3.primitives = [shape3]
 
         obstacle3.header.frame_id = self.moveit.config.base_frame_id
@@ -1581,17 +1944,17 @@ class RobotControl(Node):
         pose6 = geometry_msgs.msg.Pose()
         pose6.position.x = 0.355
         pose6.position.y = 0.0
-        pose6.position.z = self.lightsaber_gripper_height/2
+        pose6.position.z = self.gripper_height/2
         obstacle6.primitive_poses = [pose6]
 
         shape6 = shape_msgs.msg.SolidPrimitive()
         shape6.type = 1  # Box
-        shape6.dimensions = [0.35, self.robot_table_width, self.lightsaber_gripper_height]
+        shape6.dimensions = [0.35, self.robot_table_width, self.gripper_height]
         obstacle6.primitives = [shape6]
 
         obstacle6.header.frame_id = self.moveit.config.base_frame_id
 
-        self.moveit.update_persistent_obstacle([obstacle, obstacle1, obstacle2, obstacle3, obstacle4, obstacle5, obstacle6], delete=False)
+        self.moveit.update_obstacles([obstacle, obstacle1, obstacle2, obstacle3, obstacle4, obstacle5, obstacle6], delete=False)
 
         
         #arm table should be attached collision object
@@ -1616,151 +1979,13 @@ class RobotControl(Node):
 
         attached_obstacle.touch_links = ['panda_link0', 'panda_link1']
 
-        self.moveit.update_attached_obstacles(attached_obstacle, delete=False)
+        self.moveit.update_attached_obstacles([attached_obstacle], delete=False)
 
 
 
     def add_walls_callback(self, request, response):
 
-        obstacle = moveit_msgs.msg.CollisionObject()
-        obstacle.id = 'wall_0'
-
-        pose = geometry_msgs.msg.Pose()
-        pose.position.x = 0.25
-        pose.position.y = self.side_wall_distance
-        pose.position.z = 0.0
-        obstacle.primitive_poses = [pose]
-
-        shape = shape_msgs.msg.SolidPrimitive()
-        shape.type = 1  # Box
-        shape.dimensions = [3.0, 0.25, self.side_wall_height]
-        obstacle.primitives = [shape]
-
-        obstacle.header.frame_id = self.moveit.config.base_frame_id
-        # self.moveit.update_persistent_obstacle(obstacle, delete=False)
-
-        obstacle1 = moveit_msgs.msg.CollisionObject()
-        obstacle1.id = 'wall_1'
-
-        pose1 = geometry_msgs.msg.Pose()
-        pose1.position.x = 0.25
-        pose1.position.y = -self.side_wall_distance
-        pose1.position.z = 0.0
-        obstacle1.primitive_poses = [pose1]
-
-        shape1 = shape_msgs.msg.SolidPrimitive()
-        shape1.type = 1  # Box
-        shape1.dimensions = [3.0, 0.25, self.side_wall_height]
-        obstacle1.primitives = [shape1]
-
-        obstacle1.header.frame_id = self.moveit.config.base_frame_id
-
-        obstacle2 = moveit_msgs.msg.CollisionObject()
-        obstacle2.id = 'floor'
-
-        pose2 = geometry_msgs.msg.Pose()
-        pose2.position.x = 0.0
-        pose2.position.y = 0.0
-        pose2.position.z = -(self.robot_table_height)
-        obstacle2.primitive_poses = [pose2]
-
-        shape2 = shape_msgs.msg.SolidPrimitive()
-        shape2.type = 1  # Box
-        shape2.dimensions = [4.0, 2.0, 0.02]
-        obstacle2.primitives = [shape2]
-
-        obstacle2.header.frame_id = self.moveit.config.base_frame_id
-
-        obstacle3 = moveit_msgs.msg.CollisionObject()
-        obstacle3.id = 'blocks_table'
-
-        pose3 = geometry_msgs.msg.Pose()
-        pose3.position.x = self.table_center_x 
-        pose3.position.y = self.table_center_y 
-        pose3.position.z = -0.091
-        obstacle3.primitive_poses = [pose3]
-
-        shape3 = shape_msgs.msg.SolidPrimitive()
-        shape3.type = 1  # Box
-        shape3.dimensions = [self.table_len_x, self.table_len_y, 0.023]
-        obstacle3.primitives = [shape3]
-
-        obstacle3.header.frame_id = self.moveit.config.base_frame_id
-
-        obstacle4 = moveit_msgs.msg.CollisionObject()
-        obstacle4.id = 'back_wall'
-
-        pose4 = geometry_msgs.msg.Pose()
-        pose4.position.x = -self.back_wall_distance
-        pose4.position.y = 0.0
-        pose4.position.z = -self.robot_table_height + (self.back_wall_height/2)
-        obstacle4.primitive_poses = [pose4]
-
-        shape4 = shape_msgs.msg.SolidPrimitive()
-        shape4.type = 1  # Box
-        shape4.dimensions = [0.3, 4.0, self.back_wall_height]
-        obstacle4.primitives = [shape4]
-
-        obstacle4.header.frame_id = self.moveit.config.base_frame_id
-
-        obstacle5 = moveit_msgs.msg.CollisionObject()
-        obstacle5.id = 'ceiling'
-
-        pose5 = geometry_msgs.msg.Pose()
-        pose5.position.x = 0.0
-        pose5.position.y = 0.0
-        pose5.position.z = self.ceiling_height
-        obstacle5.primitive_poses = [pose5]
-
-        shape5 = shape_msgs.msg.SolidPrimitive()
-        shape5.type = 1  # Box
-        shape5.dimensions = [4.0, 2.0, 0.02]
-        obstacle5.primitives = [shape5]
-
-        obstacle5.header.frame_id = self.moveit.config.base_frame_id
-
-        obstacle6 = moveit_msgs.msg.CollisionObject()
-        obstacle6.id = 'gripper_height_offset'
-
-        pose6 = geometry_msgs.msg.Pose()
-        pose6.position.x = 0.0
-        pose6.position.y = 0.0355
-        pose6.position.z = self.lightsaber_gripper_height
-        obstacle6.primitive_poses = [pose6]
-
-        shape6 = shape_msgs.msg.SolidPrimitive()
-        shape6.type = 1  # Box
-        shape6.dimensions = [self.robot_table_length, 0.04, self.robot_table_height]
-        obstacle6.primitives = [shape6]
-
-        obstacle6.header.frame_id = self.moveit.config.base_frame_id
-
-        self.moveit.update_persistent_obstacle([obstacle, obstacle1, obstacle2, obstacle3, obstacle4, obstacle5, obstacle6], delete=False)
-
-        
-        #arm table should be attached collision object
-        attached_obstacle = moveit_msgs.msg.AttachedCollisionObject()
-        attached_obstacle.link_name = 'panda_link0'
-        attached_obstacle.object.header.frame_id = 'panda_link0'
-        attached_obstacle.object.header.stamp = self.get_clock().now().to_msg()
-        attached_obstacle.object.id = 'arm_table'
-
-        pose2 = geometry_msgs.msg.Pose()
-        pose2.position.x = 0.0
-        pose2.position.y = 0.0
-        pose2.position.z = -(self.robot_table_height/2)
-        attached_obstacle.object.primitive_poses = [pose2]
-
-        shape2 = shape_msgs.msg.SolidPrimitive()
-        shape2.type = 1  # Box
-        shape2.dimensions = [self.robot_table_length, self.robot_table_width, self.robot_table_height]
-        attached_obstacle.object.primitives = [shape2]
-
-        attached_obstacle.object.operation = attached_obstacle.object.ADD
-
-        attached_obstacle.touch_links = ['panda_link0', 'panda_link1']
-
-        self.moveit.update_attached_obstacles(attached_obstacle, delete=False)
+        self.add_walls()
 
         return response
 

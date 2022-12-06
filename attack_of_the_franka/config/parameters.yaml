@@ -17,9 +17,22 @@
       distance: 0.75 # m
       height: 0.46 # m
     lightsaber:
+      diameter: 0.033 # m
       full_length: 1.122 # m
       grip_offset: 0.15 # m
       gripper_height: 0.08 #m
     depth_filter:
       min_offset: -1.0 # m 0.075
       max_offset: 0.5 # m
+      start_location:
+        x: 0.5715 # m
+        y: -0.263525 # m
+        z: -0.18 # m
+      lift_height: 0.25 # m
+    gripper:
+      height: 0.08 # m, height of Franka attached gripper to avoid collisions
+      tcp_offset: 0.036 # m, offset from panda_hand_tcp_frame
+    speeds:
+      default: 0.3
+      pickup_lightsaber_slow: 0.1
+      pickup_lightsaber_fast: 0.3
