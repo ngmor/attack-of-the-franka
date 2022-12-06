@@ -120,9 +120,12 @@ class RobotControl(Node):
         self.sub_obj_detections = self.create_subscription(Detections,'object_detections',self.obj_detection_callback,10)
         self.srv_move_to_home = self.create_service(std_srvs.srv.Empty,
                                                     'move_to_home', self.move_to_home_callback)
-        self.grip_open_close = self.create_service(std_srvs.srv.Empty,
-                                                    'grip_open_close',
-                                                    self.grip_open_close_callback)
+        self.srv_gripper_open = self.create_service(std_srvs.srv.Empty,
+                                                    'gripper_open',
+                                                    self.gripper_open_callback)
+        self.srv_gripper_close = self.create_service(std_srvs.srv.Empty,
+                                                    'gripper_close',
+                                                    self.gripper_close_callback)
         self.gripper_grasp = self.create_service(std_srvs.srv.Empty,
                                                     'gripper_grasp', self.gripper_grasp_callback)
         self.waypoints = self.create_service(std_srvs.srv.Empty,
@@ -316,8 +319,6 @@ class RobotControl(Node):
         self.state_last = None
         self.pickup_lightsaber_state = PickupLightsaberState.ADD_SEPARATE_COLLISION_START
         self.pickup_lightsaber_state_last = None
-
-        self.grip = 0
 
         self.joint_traj = trajectory_msgs.msg.JointTrajectory()
 
@@ -1070,19 +1071,20 @@ class RobotControl(Node):
             self.state = State.FIND_ALLIES
         return response
 
-    def grip_open_close_callback(self, request, response):
-        if self.grip == 0:
-            self.close_gripper()
-            self.grip = 1
-        elif self.grip == 1:
-            self.open_gripper()
-            self.grip = 0
+    def gripper_open_callback(self, request, response):
+        self.open_gripper()
+
+        return response
+
+    def gripper_close_callback(self, request, response):
+        self.close_gripper()
+
         return response
 
     def gripper_grasp_callback(self, request, response):
-        #Note: might need to command robot to stay up when holding lightsaber
-        self.grip_lightsaber_client.wait_for_server() # TODO - remove?
         self.grasp()
+
+        return response
 
 
     # def grip_lightsaber_callback(self, request, response):
