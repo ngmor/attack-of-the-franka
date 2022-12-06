@@ -391,6 +391,14 @@ class RobotControl(Node):
 
         elif self.state == State.MOVE_TO_HOME_WAIT:
             if not self.moveit.busy:
+                self.get_logger().info("AHHHHHHHHHHHH")
+                self.get_logger().info(f"last ERRRORRRRRRR: {self.moveit.get_last_error()}")
+               # if self.moveit.get_last_error() == MoveItApiErrors.CONTROL_ERROR or MoveItApiErrors.PLAN_ERROR:
+                    # if self.moveit.get_last_error() == MoveItApiErrors.NO_ERROR:
+                    #     self.get_logger().info("please")
+                    #     self.state = State.MOVE_TO_HOME_START
+               # else:
+                self.get_logger().info("dang it")
                 self.state = State.IDLE
 
         elif self.state == State.SETUP:
@@ -453,6 +461,8 @@ class RobotControl(Node):
 
         elif self.state == State.LOOK_FOR_ENEMY:
             self.waypoints = 0
+            self.num_moves_completed = 0
+            self.num_waypoints_completed = 0
             all_transforms_found = self.update_detected_objects(ObjectType.ENEMY)
             self.x_disp = []
             self.rotate = []
@@ -486,7 +496,7 @@ class RobotControl(Node):
 
                         self.knock_enemy_waypoint = geometry_msgs.msg.Pose()
                         self.knock_enemy_waypoint.position.x = x_pos - (self.lightsaber_full_length*0.75)
-                        self.knock_enemy_waypoint.position.y = y_pos + 0.0725            #adding slight offset (slightly more than half the block width)
+                        self.knock_enemy_waypoint.position.y = y_pos            #adding slight offset (slightly more than half the block width)
                         self.knock_enemy_waypoint.position.z = -self.table_offset + height + 0.1
                         self.knock_enemy_waypoint.orientation.x = math.pi
                         self.knock_enemy_waypoint.orientation.z = -math.pi/16
@@ -501,7 +511,7 @@ class RobotControl(Node):
 
                         self.right_knock_enemy_waypoint = geometry_msgs.msg.Pose()
                         self.right_knock_enemy_waypoint.position.x = x_pos - (self.lightsaber_full_length*0.75)
-                        self.right_knock_enemy_waypoint.position.y = y_pos - 0.0725            #adding slight offset (slightly more than half the block width)
+                        self.right_knock_enemy_waypoint.position.y = y_pos #- 0.0725            #adding slight offset (slightly more than half the block width)
                         self.right_knock_enemy_waypoint.position.z = -self.table_offset + height + 0.1
                         self.right_knock_enemy_waypoint.orientation.x = math.pi
                         self.right_knock_enemy_waypoint.orientation.z = -math.pi/16
@@ -558,6 +568,8 @@ class RobotControl(Node):
             self.get_logger().info(f'Moveit State: {self.moveit._plan_state}')
             self.get_logger().info("Right Dyanmic Motion")
             self.get_logger().info(f'Idle?: {self.moveit.plan_idle}')
+            self.get_logger().info(f'num_waypoints completed: {self.num_waypoints_completed}')
+            self.get_logger().info(f'num moves completed: {self.num_moves_completed}')
             if self.moveit.planning or not self.moveit.plan_idle:
                 self.state = State.WAYPOINTS_WAIT
                 self.get_logger().info("waypoints wait!")
@@ -711,12 +723,20 @@ class RobotControl(Node):
                 # we could also just call the execution method, which would
                 # execute the last planned trajectory
                 self.plan = self.moveit.get_plan()
-                if self.moveit.get_last_error() == MoveItApiErrors.NO_ERROR:
+                if self.moveit.get_last_error() == MoveItApiErrors.CONTROL_ERROR:
+                    if self.sign == 1:
+                        self.state = State.LEFT_DYNAMIC_MOTION
+                    elif self.sign == -1 and not self.is_stab_motion:
+                        self.state = State.RIGHT_DYNAMIC_MOTION
+                    else:
+                        self.state = State.STAB_MOTION
+                elif self.moveit.get_last_error() == MoveItApiErrors.NO_ERROR:
                     self.state = State.EXECUTE_START
                     self.get_logger().info("start execute!")
                 elif self.sign == 1:
                     self.sign = -1
                     self.num_moves_completed = 0
+                    self.num_waypoints_completed = 0
                     self.state = State.RIGHT_DYNAMIC_MOTION
                     self.get_logger().info("other dynamic motion!")
                 elif not self.is_stab_motion:
@@ -1799,17 +1819,19 @@ class RobotControl(Node):
                 # swinging so the brick falls to the left from desk view
                 self.get_logger().info(f'dist_y factor {abs(dist_y-0.5*self.block_width)}, {self.block_width*1.5}')
                 self.get_logger().info(f'dist_x factor {(dist_x-0.5*self.block_width)}, {self.block_height+self.block_width*0.5}')
-                if (abs(dist_y-0.5*self.block_width) < self.block_width*1.5) and (dist_x>=0) and ((dist_x-0.5*self.block_width) < (self.block_height+self.block_width*0.5)):
-                    self.get_logger().info(f'not safe to attack in left swing')
-                    return False
+                if (abs(dist_y-0.5*self.block_width) < self.block_width*1.5) and ((dist_x-0.5*self.block_width) < (self.block_height+self.block_width*0.5)):
+                    if (dist_x>=0):
+                        self.get_logger().info(f'not safe to attack in left swing')
+                        return False
                 # swing_style = 1
             if swing_style == 1:
                 # swinging so the brick falls to the right
                 self.get_logger().info(f'dist_y factor {abs(dist_y-0.5*self.block_width)}, {self.block_width*1.5}')
                 self.get_logger().info(f'dist_x factor {(dist_x+0.5*self.block_width)}, {-(self.block_height+self.block_width*0.5)}')
-                if (abs(dist_y-0.5*self.block_width) < self.block_width*1.5) and (dist_x <= 0) and ((dist_x+0.5*self.block_width) > -(self.block_height+self.block_width*0.5)):
-                    self.get_logger().info(f'not safe to attack in right swing')
-                    return False
+                if (abs(dist_y-0.5*self.block_width) < self.block_width*1.5) and ((dist_x+0.5*self.block_width) > -(self.block_height+self.block_width*0.5)):
+                    if (dist_x <= 0):
+                        self.get_logger().info(f'not safe to attack in right swing')
+                        return False
                 # swing_style = 2
             if swing_style == 2:
                 # swinging so the brick falls straight backwards

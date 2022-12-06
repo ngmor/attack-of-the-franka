@@ -123,6 +123,7 @@ class MoveItApiErrors(Enum):
     IK_RESULT_ERROR = 3,
     PLAN_ERROR = 4,
     EXEC_ERROR = 5,
+    CONTROL_ERROR = 6,
     EMPTY_JOINT_HOME_POSITIONS = 20,
 
 
@@ -232,6 +233,7 @@ class MoveIt():
         self.check_obstacles = 0
 
         self.plan_idle = False
+
 
         # # ----------------- Sample Collision Object -------------------- #
         # obstacle_pose1 = geometry_msgs.msg.Pose()
@@ -547,11 +549,30 @@ class MoveIt():
                     self._node.get_logger().error(
                         "Plan result returned an error code other than SUCCESS(1)")
                     self._node.get_logger().error(f'Plan error code: {self._plan.error_code.val}')
+                    if self._plan.error_code.val == -4:
+                        self._start_joint_states = self._joint_states
+                        self._error = MoveItApiErrors.CONTROL_ERROR
+                        self._node.get_logger().error(f"Control error {self._error}")
+                        # self._plan_future = \
+                        # self._move_action_client.send_goal_async(self._assemble_plan_message(self._attached_obstacles))
+                        # if self._plan_future.done():
+                        #     self._error = MoveItApiErrors.NO_ERROR
+                        self._start_joint_states = self._joint_states
+                        self._start_pose = None
+
+                        self._goal_joint_states = copy.deepcopy(self._joint_states)
+                        self._goal_joint_states.position = copy.deepcopy(self.config.home_joint_positions)
+
+                        self._plan_state = _PlanState.IDLE
+                        self._state = _State.PLANNING
+                        self._node.get_logger().error(f"State {self._state}")
                 else:
                     self._error = MoveItApiErrors.NO_ERROR
                     self._excecution_complete = 1
                 # go back to IDLE
-                self._state = _State.IDLE
+                    self._state = _State.IDLE
+                
+                self._node.get_logger().error(f"State {self._state}")
 
     def _exec_sequence(self):
         """
