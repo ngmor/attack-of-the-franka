@@ -261,8 +261,7 @@ class RobotControl(Node):
         self.declare_parameter("speeds.pickup_lightsaber_speed_fast", 0.3,
                                ParameterDescriptor(description="Pickup lightsaber speed fast limit multiplier"))
         self.pickup_lightsaber_speed_fast = self.get_parameter("speeds.pickup_lightsaber_speed_fast").get_parameter_value().double_value
-        
-        
+
         self.table_offset = 0.091 # TODO - fix hardcoding?
 
         # Initialize API class
@@ -1443,6 +1442,7 @@ class RobotControl(Node):
         self.waypoints = 1
         self.waypoint_poses()
         self.state = State.WAYPOINTS
+        self.is_waypoint = True
         return response
         
 
@@ -1525,22 +1525,22 @@ class RobotControl(Node):
         # self.goal_waypoint.position.x = 0.6443
         # self.goal_waypoint.position.y = -0.1
         # self.goal_waypoint.position.z = 0.5
-        self.goal_waypoint.orientation.x = math.pi
+        # self.goal_waypoint.orientation.x = math.pi
 
-    #     self.waypoints = 1
-    #     point1 = geometry_msgs.msg.Point()
-    #     point1.x = 0.35
-    #     point1.y = 0.0
-    #     point1.z = 0.6
-    #     orientation1 = geometry_msgs.msg.Pose().orientation
-    #     orientation1.x = math.pi
-    #     # orientation1.y = 0.0
-    #     # orientation1.z = 0.0
-    #     # orientation1.w = 0.0
-    #     # orientation1.x = 1.0
-    #     # orientation1.y = 0.5
-    #     # orientation1.z = 0.0
-    #     #orientation1.w = 2.0
+        self.waypoints = 1
+        point1 = geometry_msgs.msg.Point()
+        point1.x = 0.35
+        point1.y = 0.0
+        point1.z = 0.6
+        orientation1 = geometry_msgs.msg.Pose().orientation
+        orientation1.x = math.pi
+        # orientation1.y = 0.0
+        # orientation1.z = 0.0
+        # orientation1.w = 0.0
+        # orientation1.x = 1.0
+        # orientation1.y = 0.5
+        # orientation1.z = 0.0
+        #orientation1.w = 2.0
 
     #     point2 = geometry_msgs.msg.Point()
     #     point2.x = 0.2
@@ -1579,15 +1579,16 @@ class RobotControl(Node):
 
     #     points = [point1, point2, point3, point4, point5, point6]
     #     orientations = [orientation1, orientation2, orientation3, orientation4, orientation5, orientation6]
-    #     #points = [point1, point2]
-    #     #orientations = [orientation1, orientation2]
+
+        points = [point1]
+        orientations = [orientation1]
     #     self.goal_waypoint = geometry_msgs.msg.Pose()
     #     #self.goal_pose.position = request.position
-    #     # self.goal_waypoint.position  = points[0]
-    #     # self.goal_waypoint.orientation = orientations[0]
+        self.goal_waypoint.position  = points[0]
+        self.goal_waypoint.orientation = orientations[0]
     #     self.flag = 1
     #     self.i = len(points)
-    #     self.state = State.WAYPOINTS
+        self.state = State.WAYPOINTS
     #     i = self.ind
     #    # for i in range(1, len(points)):
     #     if i < len(points):

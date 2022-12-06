@@ -77,6 +77,7 @@ import shape_msgs.msg
 import rclpy
 from tf2_ros.buffer import Buffer
 from tf2_ros.transform_listener import TransformListener
+import trajectory_msgs.msg
 
 # TODO - change to use SMACH?
 class _State(Enum):
@@ -233,6 +234,10 @@ class MoveIt():
 
         self.plan_idle = False
 
+        self.desired_joint_state = []
+
+        self.completed = False
+
 
         # # ----------------- Sample Collision Object -------------------- #
         # obstacle_pose1 = geometry_msgs.msg.Pose()
@@ -379,6 +384,7 @@ class MoveIt():
 
         """
         self._joint_states = msg
+        self._node.get_logger().info(f'joint states PLEASE!: {self._joint_states.position}')
       #  self._node.get_logger().info(f'start: {self._joint_states}')
 
     def _obs_sequence(self):
@@ -563,7 +569,7 @@ class MoveIt():
                     self._error = MoveItApiErrors.NO_ERROR
                     self._excecution_complete = 1
                 # go back to IDLE
-            self._state = _State.IDLE
+                self._state = _State.IDLE
                 
             self._node.get_logger().error(f"State {self._state}")
 
@@ -614,6 +620,34 @@ class MoveIt():
                 # Store movement result
                 self.movement_result = copy.deepcopy(self._exec_result_future.result().result)
 
+                #idea: look to see if every 10th or so joint state is within tolerance
+                self._node.get_logger().info('HERE!!!!!!!!!!!!!!!!!')
+                self._node.get_logger().info('HERE!!!!!!!!!!!!!!!!!')
+                self._node.get_logger().info('HERE!!!!!!!!!!!!!!!!!')
+                self._node.get_logger().info('HERE!!!!!!!!!!!!!!!!!')
+                self._node.get_logger().info('HERE!!!!!!!!!!!!!!!!!')
+                self._node.get_logger().info('HERE!!!!!!!!!!!!!!!!!')
+                self._node.get_logger().info('HERE!!!!!!!!!!!!!!!!!')
+                self._node.get_logger().info('HERE!!!!!!!!!!!!!!!!!')
+                self._node.get_logger().info('HERE!!!!!!!!!!!!!!!!!')
+                self._node.get_logger().info('HERE!!!!!!!!!!!!!!!!!')
+                self._node.get_logger().info('HERE!!!!!!!!!!!!!!!!!')
+                self._node.get_logger().info('HERE!!!!!!!!!!!!!!!!!')
+                self._node.get_logger().info('HERE!!!!!!!!!!!!!!!!!')
+                self._node.get_logger().info('HERE!!!!!!!!!!!!!!!!!')
+                self._node.get_logger().info('HERE!!!!!!!!!!!!!!!!!')
+                self._node.get_logger().info('HERE!!!!!!!!!!!!!!!!!')
+                self._node.get_logger().info('HERE!!!!!!!!!!!!!!!!!')
+                self._node.get_logger().info('HERE!!!!!!!!!!!!!!!!!')
+                self._node.get_logger().info('HERE!!!!!!!!!!!!!!!!!')
+                self._node.get_logger().info('HERE!!!!!!!!!!!!!!!!!')
+                self._node.get_logger().info('HERE!!!!!!!!!!!!!!!!!')
+                self._node.get_logger().info(f'joint points: {self._assemble_exec_message().trajectory.joint_trajectory.points[0].positions}')
+                self._node.get_logger().info(f'joint points: {self._assemble_exec_message().trajectory.joint_trajectory.points[0].positions[0]}')
+                self._node.get_logger().info(f'joint poses: {self._joint_states.position}')
+
+                self.desired_joint_state = self._assemble_exec_message().trajectory.joint_trajectory.points[0].positions
+
                 if self.movement_result.error_code.val != 1:
                     self._error = MoveItApiErrors.EXEC_ERROR
                     self._node.get_logger().error("Execute result returned an" +
@@ -623,8 +657,20 @@ class MoveIt():
                 else:
                     self._error = MoveItApiErrors.NO_ERROR
 
-                # return back to IDLE state to get ready for next target
+
+            for i in range(len(self.desired_joint_state)):
+                if (self._joint_states.position[i] < self.desired_joint_state[i] + 0.01) and (self._joint_states.position[i] > self.desired_joint_state[i] - 0.01):
+                    self.completed = True
+                else:
+                    self.completed = False
+            #     # return back to IDLE state to get ready for next target
+            self._node.get_logger().error(f'completed? {self.completed}')
+            if self.completed:
+                self._node.get_logger().info(f'joint points: {self.desired_joint_state}')
+                self._node.get_logger().info(f'joint poses: {self._joint_states.position}')
+                self._node.get_logger().error('changing to idle')
                 self._state = _State.IDLE
+                self.completed = False
 
     def _plan_traj(self, goal_pose, start_pose=None, execute=False):
         """
