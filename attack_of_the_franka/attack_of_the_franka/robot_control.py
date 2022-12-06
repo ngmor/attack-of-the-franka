@@ -1832,6 +1832,7 @@ class RobotControl(Node):
         # x is forward to backward
         enemy_to_ally = DetectedObjectData(enemy_obj)
         for ally in self.detected_allies:
+            self.get_logger().info(f'seeing {len(self.detected_allies)} allies on field')
             enemy_to_ally = self.tf_buffer.lookup_transform(ally.obj.name, enemy_obj.obj.name, rclpy.time.Time())
             dist_y = enemy_to_ally.transform.translation.y
             dist_x = enemy_to_ally.transform.translation.x
