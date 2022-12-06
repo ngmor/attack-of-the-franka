@@ -320,7 +320,8 @@ class CameraProcessor(Node):
         self.contours_filtered_enemy = []
 
         self.ally_hsv = HSVLimits('Ally',self.ally_mask_window_name,[100,57,120],[142,255,255],self.enable_ally_sliders)
-        self.enemy_hsv = HSVLimits('Enemy',self.enemy_mask_window_name,[169,81,167],[180,255,255],self.enable_enemy_sliders)
+       # self.enemy_hsv = HSVLimits('Enemy',self.enemy_mask_window_name,[169,81,167],[180,255,255],self.enable_enemy_sliders)
+        self.enemy_hsv = HSVLimits('Enemy',self.enemy_mask_window_name,[0,90,182],[180,255,255],self.enable_enemy_sliders)
 
         self.static_broadcaster = StaticTransformBroadcaster(self)
         self.broadcaster = TransformBroadcaster(self)
@@ -672,7 +673,7 @@ class CameraProcessor(Node):
             print(e)
             return
     def enemy_deadcount_callback(self, msg):
-        self.dead_enemies_count = msg
+        self.dead_enemies_count = msg.data
 
 
 def entry(args=None):

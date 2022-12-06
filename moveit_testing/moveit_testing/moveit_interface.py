@@ -231,6 +231,8 @@ class MoveIt():
 
         self.check_obstacles = 0
 
+        self.plan_idle = False
+
         # # ----------------- Sample Collision Object -------------------- #
         # obstacle_pose1 = geometry_msgs.msg.Pose()
         # obstacle_shape1 = shape_msgs.msg.SolidPrimitive()
@@ -290,6 +292,20 @@ class MoveIt():
                 f"MoveIt main sequence changed to {self._state.name}")
             self._state_last = self._state
 
+        if self._plan_state == _PlanState.IDLE:
+            self.plan_idle = True
+        else:
+            self.plan_idle = False
+
+        # reset states to prevent init bugs
+        if self._state != _State.PLANNING:
+            self._plan_state = _PlanState.IDLE
+            self._move_to_home = False
+            self._waypoint = False
+        
+        if self._state != _State.EXECUTING:
+            self._exec_state = _ExecState.IDLE
+
         # State Machine
         if self._state == _State.IDLE:
             pass
@@ -322,15 +338,6 @@ class MoveIt():
                 self._exec_state = _ExecState.WAIT_FOR_READY
 
             self._exec_sequence()
-
-        # reset states to prevent init bugs
-        if self._state != _State.PLANNING:
-            self._plan_state = _PlanState.IDLE
-            self._move_to_home = False
-            self._waypoint = False
-        
-        if self._state != _State.EXECUTING:
-            self._exec_state = _ExecState.IDLE
 
         self._obs_sequence()
 
@@ -465,7 +472,7 @@ class MoveIt():
             if new_plan_state:
                 # Trigger compute IK once at start of state
                 self._ik_request(self._joint_states, self._start_pose)
-
+                
             # wait for IK to finish
             if self._ik_future.done():
 
@@ -494,7 +501,8 @@ class MoveIt():
                 # Trigger compute IK once at start of state
                 # self._node.get_logger().info(f'goal pose: {type(self._goal_pose)}')
                 self._ik_request(self._start_joint_states, self._goal_pose)
-
+                self._node.get_logger().error(
+                        "Requested!")
             # wait for IK to finish
             if self._ik_future.done():
 

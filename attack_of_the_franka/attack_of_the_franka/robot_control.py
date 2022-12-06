@@ -58,6 +58,8 @@ class State(Enum):
     SETUP = auto(),
     FIND_ALLIES = auto(),
     DYNAMIC_MOTION = auto(),
+    LEFT_DYNAMIC_MOTION = auto(),
+    RIGHT_DYNAMIC_MOTION = auto(),
     STAB_MOTION = auto(),
     ENEMIES_KILLED_COUNT = auto()
 
@@ -272,6 +274,8 @@ class RobotControl(Node):
 
         self.count = 2
 
+        self.table1_x = 1.22
+        self.table1_z = self.table_offset
         self.table_len_x = 0.5
         self.table_len_y = 0.8
         self.table_center_x = 1.443
@@ -405,6 +409,7 @@ class RobotControl(Node):
 
             if table1_here and table2_here:
                 self.table1_x = table1.transform.translation.x
+                self.table1_z = table1.transform.translation.z
                 self.table_len_x = table2.transform.translation.x - table1.transform.translation.x + 0.1
                 self.table_len_y = abs(table1.transform.translation.y) + abs(table2.transform.translation.y) + 0.06
                 self.table_center_x = ((abs(table1.transform.translation.x - table2.transform.translation.x))/2) + table1.transform.translation.x
@@ -464,11 +469,14 @@ class RobotControl(Node):
 
                         x_pos = self.detected_enemies[i].tf.transform.translation.x
                         y_pos = self.detected_enemies[i].tf.transform.translation.y
-                        height = self.detected_enemies[i].tf.transform.translation.z - self.table1_x
+                        height = self.detected_enemies[i].tf.transform.translation.z - self.table1_z
+                        self.get_logger().info(f'height: {self.detected_enemies[i].tf.transform.translation.z}')
+                        self.get_logger().info(f'table1 z: {self.table1_z}')
 
                         self.goal_waypoint.position.x = x_pos - (self.lightsaber_full_length*0.75)
                         self.goal_waypoint.position.y = y_pos + self.sign*0.16            #adding slight offset (slightly more than half the block width)
-                        self.goal_waypoint.position.z = 0.2 #-self.table_offset + height + 0.18
+                        self.goal_waypoint.position.z = -self.table_offset + height + 0.18     #0.2
+                        self.get_logger().info(f'goal z: {self.goal_waypoint.position.z}')
 
                         self.goal_waypoint.orientation.x = math.pi
                         self.goal_waypoint.orientation.z = -math.pi/16
@@ -482,27 +490,63 @@ class RobotControl(Node):
 
                         self.get_logger().info("adding waypoints")
                         self.waypoint_movements.append([self.goal_waypoint, self.knock_enemy_waypoint])
-
+                        self.num_movements = len(self.waypoint_movements[0])
+                        self.get_logger().info(f'num movements: {self.num_movements}')
                         ####################
                         # Testing check for if ally would be hit by falling enemy block
                         ####################
                         self.check_ally_danger_fall(self.detected_enemies[i], 0)
 
-                    self.state = State.DYNAMIC_MOTION
+                    
+                    self.state = State.LEFT_DYNAMIC_MOTION
 
-        elif self.state == State.DYNAMIC_MOTION:
+        elif self.state == State.LEFT_DYNAMIC_MOTION:
+            self.get_logger().info("Left Dyanmic Motion")
             if self.moveit.planning:
                 self.state = State.WAYPOINTS_WAIT
+                self.get_logger().info("waypoints wait!")
+            # elif self.moveit.get_last_error() != MoveItApiErrors.NO_ERROR:
+            #     self.state = State.WAYPOINTS_WAIT
+            #     self.get_logger().info("error, try different state!")
             else:
                 # self.get_logger().info(f'waypoint array: {self.waypoint_movements}')
                 if self.waypoint_movements:
                     try:
+                        self.get_logger().info("trying movement!")
                         # self.get_logger().info(f'at index num_waypoints, num_moves: {self.num_waypoints_completed}, {self.num_moves_completed}')
                         self.moveit.plan_traj_to_pose(self.waypoint_movements[self.num_waypoints_completed][self.num_moves_completed])
                         self.num_moves_completed += 1
                         if self.num_moves_completed % 2 == 0:
                             self.num_waypoints_completed += 1
                     except:
+                        self.get_logger().info("back to idle!")
+                        self.state = State.IDLE
+                        pass
+        
+        elif self.state == State.RIGHT_DYNAMIC_MOTION:
+            # self.get_logger().info(f'Moveit State: {self.moveit._state}')
+            self.get_logger().info(f'Moveit State: {self.moveit._plan_state}')
+            self.get_logger().info("Right Dyanmic Motion")
+            self.get_logger().info(f'Idle?: {self.moveit.plan_idle}')
+            if self.moveit.planning or not self.moveit.plan_idle:
+                self.state = State.WAYPOINTS_WAIT
+                self.get_logger().info("waypoints wait!")
+            # elif self.moveit.get_last_error() != MoveItApiErrors.NO_ERROR:
+            #     self.state = State.WAYPOINTS_WAIT
+            #     self.get_logger().info("error, try different state!")
+            else:
+                # self.get_logger().info(f'waypoint array: {self.waypoint_movements}')
+                self.get_logger().info("help!")
+                if self.waypoint_movements:
+                    try:
+                        self.get_logger().info("trying movement!")
+                        # self.get_logger().info(f'at index num_waypoints, num_moves: {self.num_waypoints_completed}, {self.num_moves_completed}')
+                        self.moveit.plan_traj_to_pose(self.waypoint_movements[self.num_waypoints_completed][self.num_moves_completed])
+                        self.num_moves_completed += 1
+                        if self.num_moves_completed % 2 == 0:
+                            self.num_waypoints_completed += 1
+                    except:
+                        self.get_logger().info("back to idle!")
                         self.state = State.IDLE
                         pass
         ############
@@ -537,6 +581,7 @@ class RobotControl(Node):
         
 
         elif self.state == State.STAB_MOTION:
+            self.get_logger().info("Stab Motion")
             self.is_stab_motion = True
             joint_waypoints = []
             if self.moveit.planning:
@@ -624,7 +669,10 @@ class RobotControl(Node):
                 self.waypoints += 1
 
         elif self.state == State.WAYPOINTS_WAIT:
+            self.get_logger().info(f'Moveit State: {self.moveit._plan_state}')
+            # self.get_logger().info(f'Moveit State: {self.moveit._state}')
             # once we're not planning anymore, get the plan and move on to execute stage
+            # self.get_logger().info(f'moveit state: {self.moveit.')
             if not self.moveit.busy:
                 # This is optional. We don't have to get the plan but we can if we
                 # want to store it for later for whatever reason.
@@ -633,18 +681,21 @@ class RobotControl(Node):
                 # we could also just call the execution method, which would
                 # execute the last planned trajectory
                 self.plan = self.moveit.get_plan()
-
                 if self.moveit.get_last_error() == MoveItApiErrors.NO_ERROR:
                     self.state = State.EXECUTE_START
                     self.get_logger().info("start execute!")
                 elif self.sign == 1:
                     self.sign = -1
-                    self.state = State.DYNAMIC_MOTION
+                    self.num_moves_completed = 0
+                    self.state = State.RIGHT_DYNAMIC_MOTION
+                    self.get_logger().info("other dynamic motion!")
                 elif not self.is_stab_motion:
                     self.num_moves_completed = 0
                     self.num_waypoints_completed = 0
                     self.state = State.STAB_MOTION
+                    self.get_logger().info("stab motion!")
                 else:
+                    self.get_logger().info("no solution!")
                     self.state = State.IDLE
 
         elif self.state == State.NEXT_WAYPOINT:
@@ -738,9 +789,12 @@ class RobotControl(Node):
 
            # once we're not executing anymore, return to IDLE
             if not self.moveit.busy:
+                self.get_logger().info(f'num movements: {self.num_movements}')
+                self.get_logger().info(f'num moves completed: {self.num_moves_completed}')
+                self.get_logger().info(f'FUCK!!!!')
                 if self.num_moves_completed < self.num_movements:
                     if not self.is_stab_motion:
-                        self.get_logger().info("wrong!")
+                        self.get_logger().info("next waypoint!")
                         self.state = State.DYNAMIC_MOTION
                     else:
                         self.state = State.STAB_MOTION
@@ -754,7 +808,7 @@ class RobotControl(Node):
                         self.dead_enemy_count += self.enemies_before - self.enemies_after
 
 
-        self.dead_count_pub.publish(self.dead_enemy_count)
+        self.dead_count_pub.publish(Int16(data=self.dead_enemy_count))
 
 
 
