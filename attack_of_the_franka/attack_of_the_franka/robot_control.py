@@ -64,6 +64,8 @@ class State(Enum):
 class PickupLightsaberState(Enum):
     """State machine for lightsaber pickup subsequence."""
 
+    REMOVE_ATTACHED_COLLISION_START = auto(),
+    REMOVE_ATTACHED_COLLISION_WAIT = auto()
     ADD_SEPARATE_COLLISION_START = auto(),
     ADD_SEPARATE_COLLISION_WAIT = auto(),
     MOVE_TO_HOME_START = auto(),
@@ -250,9 +252,12 @@ class RobotControl(Node):
         self.declare_parameter("speeds.default", 0.3,
                                ParameterDescriptor(description="Default speed limit multiplier"))
         self.default_speed = self.get_parameter("speeds.default").get_parameter_value().double_value
-        self.declare_parameter("speeds.pickup_lightsaber_speed", 0.1,
-                               ParameterDescriptor(description="Pickup lightsaber speed limit multiplier"))
-        self.pickup_lightsaber_speed = self.get_parameter("speeds.pickup_lightsaber_speed").get_parameter_value().double_value
+        self.declare_parameter("speeds.pickup_lightsaber_speed_slow", 0.1,
+                               ParameterDescriptor(description="Pickup lightsaber speed slow limit multiplier"))
+        self.pickup_lightsaber_speed_slow = self.get_parameter("speeds.pickup_lightsaber_speed_slow").get_parameter_value().double_value
+        self.declare_parameter("speeds.pickup_lightsaber_speed_fast", 0.3,
+                               ParameterDescriptor(description="Pickup lightsaber speed fast limit multiplier"))
+        self.pickup_lightsaber_speed_fast = self.get_parameter("speeds.pickup_lightsaber_speed_fast").get_parameter_value().double_value
         
         
         self.table_offset = 0.091 # TODO - fix hardcoding?
@@ -323,7 +328,7 @@ class RobotControl(Node):
 
         self.state = State.IDLE
         self.state_last = None
-        self.pickup_lightsaber_state = PickupLightsaberState.ADD_SEPARATE_COLLISION_START
+        self.pickup_lightsaber_state = PickupLightsaberState.REMOVE_ATTACHED_COLLISION_START
         self.pickup_lightsaber_state_last = None
 
         self.joint_traj = trajectory_msgs.msg.JointTrajectory()
@@ -768,7 +773,7 @@ class RobotControl(Node):
 
             # reset subsequence on first callback of PICKUP_LIGHTSABER state
             if new_state:
-                self.pickup_lightsaber_state = PickupLightsaberState.ADD_SEPARATE_COLLISION_START
+                self.pickup_lightsaber_state = PickupLightsaberState.REMOVE_ATTACHED_COLLISION_START
 
             # Execute subsequence to pickup the lightsaber
             # this method returns true if the subsequence is complete, false if not
@@ -878,9 +883,20 @@ class RobotControl(Node):
             self.get_logger().info(f"Pickup lightsaber sequence changed to {self.pickup_lightsaber_state.name}")
             self.pickup_lightsaber_state_last = self.pickup_lightsaber_state
 
-        if self.pickup_lightsaber_state == PickupLightsaberState.ADD_SEPARATE_COLLISION_START:
+
+        if self.pickup_lightsaber_state == PickupLightsaberState.REMOVE_ATTACHED_COLLISION_START:
+            if self.moveit.busy_updating_obstacles:
+                self.pickup_lightsaber_state = PickupLightsaberState.REMOVE_ATTACHED_COLLISION_WAIT
+            else:
+                self.remove_attached_lightsaber()
+
+        elif self.pickup_lightsaber_state == PickupLightsaberState.REMOVE_ATTACHED_COLLISION_WAIT:
+            if not self.moveit.busy_updating_obstacles:
+                self.pickup_lightsaber_state = PickupLightsaberState.ADD_SEPARATE_COLLISION_START
+
+        elif self.pickup_lightsaber_state == PickupLightsaberState.ADD_SEPARATE_COLLISION_START:
             
-            self.config.max_velocity_scaling_factor = self.pickup_lightsaber_speed
+            self.config.max_velocity_scaling_factor = self.pickup_lightsaber_speed_fast
 
             if self.moveit.busy_updating_obstacles:
                 self.pickup_lightsaber_state = PickupLightsaberState.ADD_SEPARATE_COLLISION_WAIT
@@ -954,6 +970,8 @@ class RobotControl(Node):
                 self.pickup_lightsaber_state = PickupLightsaberState.MOVE_TO_LIGHTSABER_PICK_START
 
         elif self.pickup_lightsaber_state == PickupLightsaberState.MOVE_TO_LIGHTSABER_PICK_START:
+            self.config.max_velocity_scaling_factor = self.pickup_lightsaber_speed_slow
+
             if self.moveit.planning:
                 self.pickup_lightsaber_state = PickupLightsaberState.MOVE_TO_LIGHTSABER_PICK_WAIT
             else:
@@ -1028,6 +1046,8 @@ class RobotControl(Node):
                 self.pickup_lightsaber_state = PickupLightsaberState.RETURN_TO_HOME_START
 
         elif self.pickup_lightsaber_state == PickupLightsaberState.RETURN_TO_HOME_START:
+            self.config.max_velocity_scaling_factor = self.pickup_lightsaber_speed_fast
+
             if self.moveit.planning:
                 self.pickup_lightsaber_state = PickupLightsaberState.RETURN_TO_HOME_WAIT
             else:
@@ -1740,15 +1760,17 @@ class RobotControl(Node):
         obstacle3 = moveit_msgs.msg.CollisionObject()
         obstacle3.id = 'blocks_table'
 
+        table_size = self.robot_table_height - self.table_offset
+
         pose3 = geometry_msgs.msg.Pose()
         pose3.position.x = self.table_center_x 
         pose3.position.y = self.table_center_y 
-        pose3.position.z = -0.091
+        pose3.position.z = -self.robot_table_height + table_size / 2.
         obstacle3.primitive_poses = [pose3]
 
         shape3 = shape_msgs.msg.SolidPrimitive()
         shape3.type = 1  # Box
-        shape3.dimensions = [self.table_len_x, self.table_len_y, 0.023]
+        shape3.dimensions = [self.table_len_x, self.table_len_y, table_size] # 0.023
         obstacle3.primitives = [shape3]
 
         obstacle3.header.frame_id = self.moveit.config.base_frame_id

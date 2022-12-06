@@ -33,4 +33,5 @@
       max_offset: 0.5 # m
     speeds:
       default: 0.3
-      pickup_lightsaber: 0.1
+      pickup_lightsaber_slow: 0.1
+      pickup_lightsaber_fast: 0.3
