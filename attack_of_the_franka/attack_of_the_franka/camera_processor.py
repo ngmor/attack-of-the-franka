@@ -264,7 +264,7 @@ class CameraProcessor(Node):
         self.declare_parameter("enable_ally_sliders", False,
                                ParameterDescriptor(description="Enable Ally HSV sliders"))
         self.enable_ally_sliders = self.get_parameter("enable_ally_sliders").get_parameter_value().bool_value
-        self.declare_parameter("enable_enemy_sliders", True,
+        self.declare_parameter("enable_enemy_sliders", False,
                                ParameterDescriptor(description="Enable Enemy HSV sliders"))
         self.enable_enemy_sliders = self.get_parameter("enable_enemy_sliders").get_parameter_value().bool_value
         self.declare_parameter("invert_ally_hue", False,

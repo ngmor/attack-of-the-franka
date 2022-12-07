@@ -237,7 +237,7 @@ class RobotControl(Node):
                                ParameterDescriptor(description="Lightsaber initial location x"))
         self.declare_parameter("lightsaber.start_location.y", -0.263525,
                                ParameterDescriptor(description="Lightsaber initial location y"))
-        self.declare_parameter("lightsaber.start_location.z", -0.18,
+        self.declare_parameter("lightsaber.start_location.z", -0.15,
                                ParameterDescriptor(description="Lightsaber initial location z"))
         self.lightsaber_start_location = geometry_msgs.msg.Point()
         self.lightsaber_start_location.x = self.get_parameter("lightsaber.start_location.x").get_parameter_value().double_value
@@ -2139,10 +2139,11 @@ class RobotControl(Node):
                 # swinging so the brick falls straight backwards
                 self.get_logger().info(f'dist_y factor {(dist_y-0.5*self.block_width)}, {(self.block_height+self.block_width*0.5)}')
                 self.get_logger().info(f'dist_x factor {(abs(dist_x)-0.5*self.block_width)}, {self.block_width}')
-                if ((abs(dist_x)-0.5*self.block_width) < self.block_width) and ((dist_y-0.5*self.block_width) < (self.block_height+self.block_width*0.5)):
-                    if (dist_y>=0):
-                        self.get_logger().info(f'not safe to attack in stabbing style')
-                        return False
+                if (((abs(dist_x)-0.5*self.block_width) < self.block_width)
+                        and ((dist_y+0.5*self.block_width) < (self.block_height+self.block_width*0.5))
+                        and (dist_y <= 0)):
+                    self.get_logger().info(f'not safe to attack in stabbing style')
+                    return False
             self.get_logger().info(f'safe to attack in style {swing_style}')
         return True
 
