@@ -648,49 +648,52 @@ class RobotControl(Node):
                         self.get_logger().info(f'height: {self.detected_enemies[i].tf.transform.translation.z}')
                         self.get_logger().info(f'table1 z: {self.table1_z}')
 
+                        waypoint_height_correction = 0.18
+                        waypoint_angle = -math.radians(9.)
+
                         #left waypoint
                         self.left_goal_waypoint.position.x = x_pos - (self.lightsaber_full_length*0.75)
                         self.left_goal_waypoint.position.y = y_pos + 0.16            #adding slight offset (slightly more than half the block width)
-                        self.left_goal_waypoint.position.z = -self.table_offset + height + 0.1
+                        self.left_goal_waypoint.position.z = -self.table_offset + height + waypoint_height_correction
                         self.get_logger().info(f'goal z: {self.goal_waypoint.position.z}')
                         self.left_goal_waypoint.orientation.x = math.pi
-                        self.left_goal_waypoint.orientation.z = -math.pi/16
+                        self.left_goal_waypoint.orientation.z = waypoint_angle
 
                         self.left_knock_enemy_waypoint = geometry_msgs.msg.Pose()
                         self.left_knock_enemy_waypoint.position.x = x_pos - (self.lightsaber_full_length*0.75)
                         self.left_knock_enemy_waypoint.position.y = y_pos - 0.05           #adding slight offset (slightly more than half the block width)
-                        self.left_knock_enemy_waypoint.position.z = -self.table_offset + height + 0.1
+                        self.left_knock_enemy_waypoint.position.z = -self.table_offset + height + waypoint_height_correction
                         self.left_knock_enemy_waypoint.orientation.x = math.pi
-                        self.left_knock_enemy_waypoint.orientation.z = -math.pi/16
+                        self.left_knock_enemy_waypoint.orientation.z = waypoint_angle
 
                         self.left_reverse_enemy_waypoint = geometry_msgs.msg.Pose()
                         self.left_reverse_enemy_waypoint.position.x = x_pos - (self.lightsaber_full_length*0.75)
                         self.left_reverse_enemy_waypoint.position.y = y_pos + 0.16           #adding slight offset (slightly more than half the block width)
-                        self.left_reverse_enemy_waypoint.position.z = -self.table_offset + height + 0.1
+                        self.left_reverse_enemy_waypoint.position.z = -self.table_offset + height + waypoint_height_correction
                         self.left_reverse_enemy_waypoint.orientation.x = math.pi
-                        self.left_reverse_enemy_waypoint.orientation.z = -math.pi/16
+                        self.left_reverse_enemy_waypoint.orientation.z = waypoint_angle
 
                         #right waypoint
                         self.right_goal_waypoint.position.x = x_pos - (self.lightsaber_full_length*0.75)
                         self.right_goal_waypoint.position.y = y_pos - 0.16            #adding slight offset (slightly more than half the block width)
-                        self.right_goal_waypoint.position.z = -self.table_offset + height + 0.1
+                        self.right_goal_waypoint.position.z = -self.table_offset + height + waypoint_height_correction
                         self.get_logger().info(f'goal z: {self.right_goal_waypoint.position.z}')
                         self.right_goal_waypoint.orientation.x = math.pi
-                        self.right_goal_waypoint.orientation.z = -math.pi/16
+                        self.right_goal_waypoint.orientation.z = waypoint_angle
 
                         self.right_knock_enemy_waypoint = geometry_msgs.msg.Pose()
                         self.right_knock_enemy_waypoint.position.x = x_pos - (self.lightsaber_full_length*0.75)
                         self.right_knock_enemy_waypoint.position.y = y_pos + 0.05          #adding slight offset (slightly more than half the block width)
-                        self.right_knock_enemy_waypoint.position.z = -self.table_offset + height + 0.1
+                        self.right_knock_enemy_waypoint.position.z = -self.table_offset + height + waypoint_height_correction
                         self.right_knock_enemy_waypoint.orientation.x = math.pi
-                        self.right_knock_enemy_waypoint.orientation.z = -math.pi/16
+                        self.right_knock_enemy_waypoint.orientation.z = waypoint_angle
 
                         self.right_reverse_enemy_waypoint = geometry_msgs.msg.Pose()
                         self.right_reverse_enemy_waypoint.position.x = x_pos - (self.lightsaber_full_length*0.75)
                         self.right_reverse_enemy_waypoint.position.y = y_pos - 0.16           #adding slight offset (slightly more than half the block width)
-                        self.right_reverse_enemy_waypoint.position.z = -self.table_offset + height + 0.1
+                        self.right_reverse_enemy_waypoint.position.z = -self.table_offset + height + waypoint_height_correction
                         self.right_reverse_enemy_waypoint.orientation.x = math.pi
-                        self.right_reverse_enemy_waypoint.orientation.z = -math.pi/16
+                        self.right_reverse_enemy_waypoint.orientation.z = waypoint_angle
 
 
                         self.get_logger().info("adding waypoints")
