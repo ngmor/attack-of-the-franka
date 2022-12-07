@@ -234,14 +234,14 @@ class RobotControl(Node):
         self.declare_parameter("lightsaber.full_length", 1.122,
                                ParameterDescriptor(description="Lightsaber full length"))
         self.lightsaber_full_length = self.get_parameter("lightsaber.full_length").get_parameter_value().double_value
-        self.declare_parameter("lightsaber.grip_offset", 0.15,
+        self.declare_parameter("lightsaber.grip_offset", 0.125,
                                ParameterDescriptor(description="Lightsaber grip offset"))
         self.lightsaber_grip_offset = self.get_parameter("lightsaber.grip_offset").get_parameter_value().double_value
         self.declare_parameter("lightsaber.start_location.x", 0.5715,
                                ParameterDescriptor(description="Lightsaber initial location x"))
         self.declare_parameter("lightsaber.start_location.y", -0.263525,
                                ParameterDescriptor(description="Lightsaber initial location y"))
-        self.declare_parameter("lightsaber.start_location.z", -0.15,
+        self.declare_parameter("lightsaber.start_location.z", -0.175,
                                ParameterDescriptor(description="Lightsaber initial location z"))
         self.lightsaber_start_location = geometry_msgs.msg.Point()
         self.lightsaber_start_location.x = self.get_parameter("lightsaber.start_location.x").get_parameter_value().double_value
@@ -384,6 +384,8 @@ class RobotControl(Node):
 
         self.num_waypoints_completed = 0
         self.looking_for_enemies = 0
+
+        self.open_count = 0
 
         self.get_logger().info("robot_control node started")
 
@@ -1143,6 +1145,7 @@ class RobotControl(Node):
                     self.pickup_lightsaber_state = PickupLightsaberState.MOVE_TO_LIGHTSABER_STANDOFF_START
                 else:
                     self.pickup_lightsaber_state = PickupLightsaberState.OPEN_START
+                    self.open_count = 0
 
         elif self.pickup_lightsaber_state == PickupLightsaberState.OPEN_START:
             if new_state:
@@ -1158,7 +1161,12 @@ class RobotControl(Node):
 
         elif self.pickup_lightsaber_state == PickupLightsaberState.OPEN_WAIT:
             if self.pickup_lightsaber_future.done():
-                self.pickup_lightsaber_state = PickupLightsaberState.MOVE_TO_LIGHTSABER_STANDOFF_START
+                self.open_count += 1
+
+                if self.open_count >= 2:
+                    self.pickup_lightsaber_state = PickupLightsaberState.MOVE_TO_LIGHTSABER_STANDOFF_START
+                else:
+                    self.pickup_lightsaber_state = PickupLightsaberState.OPEN_START
 
         elif self.pickup_lightsaber_state == PickupLightsaberState.MOVE_TO_LIGHTSABER_STANDOFF_START:
             if self.moveit.planning:
