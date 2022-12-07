@@ -56,6 +56,7 @@ class State(Enum):
     WAYPOINTS_WAIT = auto(),
     NEXT_WAYPOINT = auto(),
     LOOK_FOR_ENEMY = auto(),
+    CHECK_FOR_ENEMY_REMAINING = auto(),
     SETUP = auto(),
     FIND_ALLIES = auto(),
     DYNAMIC_MOTION = auto(),
@@ -379,6 +380,7 @@ class RobotControl(Node):
         self.enemies_before = 0
 
         self.num_waypoints_completed = 0
+        self.looking_for_enemies = 0
 
         self.get_logger().info("robot_control node started")
 
@@ -505,7 +507,10 @@ class RobotControl(Node):
                 elif self.is_stab_motion and self.num_moves_completed != self.num_movements:
                     self.state = State.STAB_MOTION
                 else:
-                    self.state = State.IDLE
+                    if self.looking_for_enemies:
+                        self.state = State.LOOK_FOR_ENEMY
+                    else:
+                        self.state = State.IDLE
 
         elif self.state == State.SETUP:
             try:
@@ -594,10 +599,12 @@ class RobotControl(Node):
 
 
         elif self.state == State.LOOK_FOR_ENEMY:
+            self.looking_for_enemies = 1
             self.waypoints = 0
             self.num_moves_completed = 0
             self.num_waypoints_completed = 0
             all_transforms_found = self.update_detected_objects(ObjectType.ENEMY)
+            self.get_logger().info(f'number of enemies on field: {len(self.detected_enemies)}')
             self.x_disp = []
             self.rotate = []
             self.waypoint_movements = []
@@ -700,9 +707,10 @@ class RobotControl(Node):
             #     self.state = State.WAYPOINTS_WAIT
             #     self.get_logger().info("error, try different state!")
             else:
-                self.get_logger().info(f'waypoint array: {self.waypoint_movements}')
+                # self.get_logger().info(f'waypoint array: {self.waypoint_movements}')
                 if self.waypoint_movements:
                     try:
+                    # if self.num_waypoints_completed < len(self.waypoint_movements):
                         self.get_logger().info("trying movement!")
                         # self.get_logger().info(f'at index num_waypoints, num_moves: {self.num_waypoints_completed}, {self.num_moves_completed}')
                         self.moveit.plan_traj_to_pose(self.waypoint_movements[self.num_waypoints_completed][self.num_moves_completed])
@@ -919,6 +927,18 @@ class RobotControl(Node):
                 else:
                     self.get_logger().info("no solution!")
                     self.state = State.IDLE
+
+        elif self.state == State.CHECK_FOR_ENEMY_REMAINING:
+            all_transforms_found = self.update_detected_objects(ObjectType.ENEMY)
+            if all_transforms_found:
+                enemies_left = len(self.detected_enemies)
+                if enemies_left > 0:
+                    self.get_logger().info("Attacking next enemy")
+                    self.state = State.LOOK_FOR_ENEMY
+                else:
+                    self.get_logger().info("All enemies vanquished")
+            else:
+                self.state = State.IDLE
 
         elif self.state == State.NEXT_WAYPOINT:
                 # if self.home_waypoint == True:
