@@ -58,7 +58,10 @@ class State(Enum):
     LOOK_FOR_ENEMY = auto(),
     CHECK_FOR_ENEMY_REMAINING = auto(),
     SETUP = auto(),
+    RESET_ALLIES = auto(),
+    RESET_ALLIES_WAIT = auto(),
     FIND_ALLIES = auto(),
+    FIND_ALLIES_WAIT = auto(),
     DYNAMIC_MOTION = auto(),
     LEFT_DYNAMIC_MOTION = auto(),
     RIGHT_DYNAMIC_MOTION = auto(),
@@ -460,6 +463,8 @@ class RobotControl(Node):
 
             self.moveit.update_obstacles(obstacle_list, delete=False)
 
+        return all_transforms_found
+
     def timer_callback(self):
         """
         Check states and call the specific plan or execute from MoveIt API accordingly.
@@ -475,7 +480,7 @@ class RobotControl(Node):
         # call MoveIt handler
         self.moveit.handle()
 
-        self.find_allies()
+        # self.find_allies()
 
         new_state = self.state != self.state_last
 
@@ -537,15 +542,18 @@ class RobotControl(Node):
                 self.add_walls()
                 self.add_attached_lightsaber()
                 self.obstacles_added = 1
-                self.state = State.FIND_ALLIES
+                self.state = State.RESET_ALLIES
 
         elif self.state == State.RESET_ALLIES:
-            self.moveit.reset_obstacles(FRAMES.ALLY)
+            
             if self.moveit.busy_updating_obstacles:
+                self.state = State.RESET_ALLIES_WAIT
+            else:
+                self.moveit.reset_obstacles(FRAMES.ALLY)
         
-        elif self.state == State.
-                if not self.moveit.busy_updating_obstacles:
-                    self.state = State.FIND_ALLIES
+        elif self.state == State.RESET_ALLIES_WAIT:
+            if not self.moveit.busy_updating_obstacles:
+                self.state = State.FIND_ALLIES
 
         elif self.state == State.FIND_ALLIES:
             try:
@@ -563,6 +571,7 @@ class RobotControl(Node):
                 table2_here = False
                 return
 
+            # TODO - move the table check to SETUP
             if table1_here and table2_here:
                 self.get_logger().info("PLEASE SIR")
                 self.table1_x = table1.transform.translation.x
@@ -572,37 +581,37 @@ class RobotControl(Node):
                 self.table_center_x = ((abs(table1.transform.translation.x - table2.transform.translation.x))/2) + table1.transform.translation.x
                 self.table_center_y = (table1.transform.translation.y + table2.transform.translation.y)/2
 
-            all_transforms_found = self.update_detected_objects(ObjectType.ALLY)
-            obstacle_list = []
-            if not self.moveit.busy:
-                self.get_logger().info("AHHHH")
-                if all_transforms_found:
-                    for i in range(len(self.detected_allies)):
-                    # if ally00_here: # and table_here:
-                        obstacle = moveit_msgs.msg.CollisionObject()
-                        obstacle.id = FRAMES.ALLY + f'{i:02d}'
+            # Wait for all ally transforms to be detected
+            if self.update_detected_objects(ObjectType.ALLY):
+                obstacle_list = []
+                for i in range(len(self.detected_allies)):
+                # if ally00_here: # and table_here:
+                    obstacle = moveit_msgs.msg.CollisionObject()
+                    obstacle.id = self.detected_allies[i].obj.name
 
-                        shape = shape_msgs.msg.SolidPrimitive()
-                        shape.type = 1  # Box
-                        length = 0.078
-                        width = 0.105
-                        height = 0.2286             #-(table.transform.translation.z - ally00.transform.translation.z)
-                        shape.dimensions = [length, width, height]
-                        obstacle.primitives = [shape]
+                    shape = shape_msgs.msg.SolidPrimitive()
+                    shape.type = 1  # Box
+                    length = 0.078
+                    width = 0.105
+                    height = 0.2286             #-(table.transform.translation.z - ally00.transform.translation.z)
+                    shape.dimensions = [length, width, height]
+                    obstacle.primitives = [shape]
 
-                        pose = geometry_msgs.msg.Pose()
-                        pose.position.x = self.detected_allies[i].tf.transform.translation.x
-                        pose.position.y = self.detected_allies[i].tf.transform.translation.y
-                        pose.position.z = -0.091 + (height/2) #table.transform.translation.z 0.115
-                        obstacle.primitive_poses = [pose]
+                    pose = geometry_msgs.msg.Pose()
+                    pose.position.x = self.detected_allies[i].tf.transform.translation.x
+                    pose.position.y = self.detected_allies[i].tf.transform.translation.y
+                    pose.position.z = -0.091 + (height/2) #table.transform.translation.z 0.115
+                    obstacle.primitive_poses = [pose]
 
-                        obstacle.header.frame_id = self.moveit.config.base_frame_id
-                        obstacle_list.append(obstacle)
+                    obstacle.header.frame_id = self.moveit.config.base_frame_id
+                    obstacle_list.append(obstacle)
 
-                    self.moveit.update_obstacles(obstacle_list, delete=False)
+                self.moveit.update_obstacles(obstacle_list, delete=False)
+                self.state = State.FIND_ALLIES_WAIT
 
-            self.find_allies()
-            self.state = State.LOOK_FOR_ENEMY
+        elif self.state == State.FIND_ALLIES_WAIT:
+            if not self.moveit.busy_updating_obstacles:
+                self.state = State.LOOK_FOR_ENEMY
 
 
         elif self.state == State.LOOK_FOR_ENEMY:
@@ -936,17 +945,17 @@ class RobotControl(Node):
                     self.state = State.IDLE
 
         elif self.state == State.CHECK_FOR_ENEMY_REMAINING:
-            all_transforms_found = self.update_detected_objects(ObjectType.ENEMY)
-            if all_transforms_found:
+            
+            # Update objects, wait for all transforms to be found
+            if self.update_detected_objects(ObjectType.ENEMY):
                 enemies_left = len(self.detected_enemies)
                 if enemies_left > 0:
                     self.get_logger().info("Attacking next enemy")
-                    self.state = State.LOOK_FOR_ENEMY
+                    self.state = State.RESET_ALLIES
                 else:
                     self.get_logger().info("All enemies vanquished")
+                    self.looking_for_enemies = 0
                     self.state = State.IDLE
-            else:
-                self.state = State.IDLE
 
         elif self.state == State.NEXT_WAYPOINT:
                 # if self.home_waypoint == True:

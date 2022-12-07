@@ -389,7 +389,10 @@ class MoveIt():
             # TODO - change to debug level
            # self._node.get_logger().info(
             #    f"MoveIt object sequence changed to {self._obs_state.name}")
+            self._node.get_logger().info(
+                f"MoveIt obstacle sequence changed to {self._obs_state.name}")
             self._obs_state_last = self._obs_state
+            
 
         if self._obs_state == _ObstacleState.IDLE:
             pass
