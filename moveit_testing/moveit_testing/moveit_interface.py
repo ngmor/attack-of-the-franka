@@ -72,7 +72,7 @@ import shape_msgs.msg
 import rclpy
 from tf2_ros.buffer import Buffer
 from tf2_ros.transform_listener import TransformListener
-import time
+import numpy as np
 
 # TODO - change to use SMACH?
 class _State(Enum):
@@ -230,6 +230,9 @@ class MoveIt():
         self.joint_past = [0,0,0,0,0,0,0,0,0,0]
 
         self.iterations = 0
+        
+        self._delete_via_string = False
+        self._string_to_delete = ""
 
         # # ----------------- Sample Collision Object -------------------- #
         # obstacle_pose1 = geometry_msgs.msg.Pose()
@@ -924,7 +927,18 @@ class MoveIt():
             # add to planning scene's attached collision object list
             self._planning_scene.robot_state.attached_collision_objects = self._attached_obstacles
 
-        if not self._delete_obs:
+        if self._delete_via_string:
+            #extra step to delete any allies in planning scene that were removed from the world
+            obstacle_copy = copy.deepcopy(self._planning_scene.world.collision_objects)
+            self._planning_scene.world.collision_objects = []
+            #re-add objects to planning scene that do not contain the string name
+            for item in obstacle_copy:
+                if self._string_to_delete not in item.id:
+                    self._planning_scene.world.collision_objects.append(copy.deepcopy(item))
+
+            self._delete_via_string = False
+
+        elif not self._delete_obs:
             _obstacle_ID_list = []
             for obstacle in self._planning_scene.world.collision_objects:
                 _obstacle_ID_list.append(obstacle.id)
@@ -962,12 +976,35 @@ class MoveIt():
         -------
             none
         """
+
         if self._obs_state != _ObstacleState.IDLE:
             # TODO - return some form of error, we are busy
             return
         self._obs_state = _ObstacleState.WAIT_FOR_READY
         self._obs_list = copy.deepcopy(obstacle_list)
+
         self._delete_obs = delete
+        # TODO - return some sort of message indicating success or failure
+        return
+
+    def reset_obstacles(self, string):
+        """
+        Add, modify, or delete obstacles in the planning scene.
+        Args:
+            obstacle_list: list of obstacles, each of type moveit_msgs.msg.CollisionObject()
+            delete:        a boolean variable to specify whether to delete the obstacles
+        Returns
+        -------
+            none
+        """
+
+        if self._obs_state != _ObstacleState.IDLE:
+            # TODO - return some form of error, we are busy
+            return
+        self._obs_state = _ObstacleState.WAIT_FOR_READY
+        self._string_to_delete = string
+
+        self._delete_via_string = True
         # TODO - return some sort of message indicating success or failure
         return
 

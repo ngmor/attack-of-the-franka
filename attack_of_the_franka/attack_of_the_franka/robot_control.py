@@ -475,7 +475,7 @@ class RobotControl(Node):
         # call MoveIt handler
         self.moveit.handle()
 
-        # self.find_allies()
+        self.find_allies()
 
         new_state = self.state != self.state_last
 
@@ -508,7 +508,7 @@ class RobotControl(Node):
                     self.state = State.STAB_MOTION
                 else:
                     if self.looking_for_enemies:
-                        self.state = State.LOOK_FOR_ENEMY
+                        self.state = State.CHECK_FOR_ENEMY_REMAINING
                     else:
                         self.state = State.IDLE
 
@@ -539,6 +539,13 @@ class RobotControl(Node):
                 self.obstacles_added = 1
                 self.state = State.FIND_ALLIES
 
+        elif self.state == State.RESET_ALLIES:
+            self.moveit.reset_obstacles(FRAMES.ALLY)
+            if self.moveit.busy_updating_obstacles:
+        
+        elif self.state == State.
+                if not self.moveit.busy_updating_obstacles:
+                    self.state = State.FIND_ALLIES
 
         elif self.state == State.FIND_ALLIES:
             try:
@@ -833,7 +840,7 @@ class RobotControl(Node):
                                             math.radians(-1),                    # panda_joint3
                                             math.radians(-156 + ((80/0.4826)*self.x_disp[i])),     # panda_joint4
                                             math.radians(0),       # panda_joint5
-                                            math.radians(125 - ((6/0.4826)*self.x_disp[i])),     # panda_joint6
+                                            math.radians(130 - ((6/0.4826)*self.x_disp[i])),     # panda_joint6
                                             math.radians(45),     # panda_joint7
                                                                     # TODO - This might open the gripper when we try to move home
                                                                     # CAREFUL!
@@ -937,6 +944,7 @@ class RobotControl(Node):
                     self.state = State.LOOK_FOR_ENEMY
                 else:
                     self.get_logger().info("All enemies vanquished")
+                    self.state = State.IDLE
             else:
                 self.state = State.IDLE
 
