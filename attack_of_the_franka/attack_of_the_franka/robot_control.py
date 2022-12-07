@@ -632,7 +632,9 @@ class RobotControl(Node):
                 if all_transforms_found:
                     self.enemies_before = len(self.detected_enemies)
                     # self.get_logger().info(f'length: {len(self.detected_enemies)}')
-                    for i in range(len(self.detected_enemies)):
+                    # for i in range(len(self.detected_enemies)):
+                    if len(self.detected_enemies) > 0:
+                        i = 0
                         # self.get_logger().info(f'in detected enemies array: {self.detected_enemies[i].tf.transform.translation.x}')
                         self.x_disp.append(self.detected_enemies[i].tf.transform.translation.x - self.table1_x + 0.1)     #add buffer offset
                         self.rotate.append(math.atan2(self.detected_enemies[i].tf.transform.translation.y, self.detected_enemies[i].tf.transform.translation.x))
