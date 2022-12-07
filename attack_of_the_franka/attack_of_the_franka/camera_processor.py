@@ -601,7 +601,7 @@ class CameraProcessor(Node):
 
         color_image_with_tracking = cv2.putText(color_image_with_tracking, f'Allies: {len(self.contours_filtered_ally)}',(50,50),cv2.FONT_HERSHEY_DUPLEX,1,(255,0,0))
         color_image_with_tracking = cv2.putText(color_image_with_tracking, f'Enemies: {len(self.contours_filtered_enemy)}',(50,100),cv2.FONT_HERSHEY_DUPLEX,1,(0,0,255))
-        color_image_with_tracking = cv2.putText(color_image_with_tracking, f'Enemies Vanquished!: {self.dead_enemies_count}',(50,150),cv2.FONT_HERSHEY_DUPLEX,1,(128,0,0))
+        color_image_with_tracking = cv2.putText(color_image_with_tracking, f'Enemies Vanquished!: {self.dead_enemies_count}',(50,150),cv2.FONT_HERSHEY_DUPLEX,1,(0,0,128))
 
         cv2.imshow(self.color_window_name, color_image_with_tracking)
         cv2.waitKey(1)

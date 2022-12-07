@@ -233,11 +233,11 @@ class RobotControl(Node):
         self.declare_parameter("lightsaber.grip_offset", 0.15,
                                ParameterDescriptor(description="Lightsaber grip offset"))
         self.lightsaber_grip_offset = self.get_parameter("lightsaber.grip_offset").get_parameter_value().double_value
-        self.declare_parameter("lightsaber.start_location.x", 0.,
+        self.declare_parameter("lightsaber.start_location.x", 0.5715,
                                ParameterDescriptor(description="Lightsaber initial location x"))
-        self.declare_parameter("lightsaber.start_location.y", 0.,
+        self.declare_parameter("lightsaber.start_location.y", -0.263525,
                                ParameterDescriptor(description="Lightsaber initial location y"))
-        self.declare_parameter("lightsaber.start_location.z", 0.,
+        self.declare_parameter("lightsaber.start_location.z", -0.18,
                                ParameterDescriptor(description="Lightsaber initial location z"))
         self.lightsaber_start_location = geometry_msgs.msg.Point()
         self.lightsaber_start_location.x = self.get_parameter("lightsaber.start_location.x").get_parameter_value().double_value
@@ -473,7 +473,7 @@ class RobotControl(Node):
         # call MoveIt handler
         self.moveit.handle()
 
-        self.find_allies()
+        # self.find_allies()
 
         new_state = self.state != self.state_last
 
@@ -500,7 +500,12 @@ class RobotControl(Node):
                     #     self.state = State.MOVE_TO_HOME_START
                # else:
                 self.get_logger().info("dang it")
-                self.state = State.IDLE
+                if self.sign == -1 and not self.is_stab_motion:
+                    self.state = State.RIGHT_DYNAMIC_MOTION
+                elif self.is_stab_motion and self.num_moves_completed != self.num_movements:
+                    self.state = State.STAB_MOTION
+                else:
+                    self.state = State.IDLE
 
         elif self.state == State.SETUP:
             try:
@@ -527,37 +532,65 @@ class RobotControl(Node):
                 self.add_walls()
                 self.add_attached_lightsaber()
                 self.obstacles_added = 1
-                self.state = State.LOOK_FOR_ENEMY
+                self.state = State.FIND_ALLIES
 
 
-        # elif self.state == State.FIND_ALLIES:
-        #     all_transforms_found = self.update_detected_objects(ObjectType.ALLY)
+        elif self.state == State.FIND_ALLIES:
+            try:
+                table1 = self.tf_buffer.lookup_transform(FRAMES.PANDA_BASE, FRAMES.WORK_TABLE1, rclpy.time.Time())
+                table1_here = True
+            except TransformException:
+                self.get_logger().info("UGH 1")
+                table1_here = False
+                return
+            try:
+                table2 = self.tf_buffer.lookup_transform(FRAMES.PANDA_BASE, FRAMES.WORK_TABLE2, rclpy.time.Time())
+                table2_here = True
+            except TransformException:
+                self.get_logger().info("UGH 2")
+                table2_here = False
+                return
 
-        #     # if ally00_here: # and table_here:
-        #     self.get_logger().info('AHHHHHHHH')
-        #     obstacle = moveit_msgs.msg.CollisionObject()
-        #     obstacle.id = FRAMES.ALLY + '00'
+            if table1_here and table2_here:
+                self.get_logger().info("PLEASE SIR")
+                self.table1_x = table1.transform.translation.x
+                self.table1_z = table1.transform.translation.z
+                self.table_len_x = table2.transform.translation.x - table1.transform.translation.x + 0.1
+                self.table_len_y = abs(table1.transform.translation.y) + abs(table2.transform.translation.y) + 0.06
+                self.table_center_x = ((abs(table1.transform.translation.x - table2.transform.translation.x))/2) + table1.transform.translation.x
+                self.table_center_y = (table1.transform.translation.y + table2.transform.translation.y)/2
 
-        #     shape = shape_msgs.msg.SolidPrimitive()
-        #     shape.type = 1  # Box
-        #     length = 0.078
-        #     width = 0.105
-        #     height = 0.2286 #-(table.transform.translation.z - ally00.transform.translation.z)
-        #     shape.dimensions = [length, width, height]
-        #     obstacle.primitives = [shape]
+            all_transforms_found = self.update_detected_objects(ObjectType.ALLY)
+            obstacle_list = []
+            if not self.moveit.busy:
+                self.get_logger().info("AHHHH")
+                if all_transforms_found:
+                    for i in range(len(self.detected_allies)):
+                    # if ally00_here: # and table_here:
+                        obstacle = moveit_msgs.msg.CollisionObject()
+                        obstacle.id = FRAMES.ALLY + f'{i:02d}'
 
-        #     pose = geometry_msgs.msg.Pose()
-        #     pose.position.x = ally00.transform.translation.x
-        #     pose.position.y = ally00.transform.translation.y
-        #     pose.position.z = -0.091 + (height/2) #table.transform.translation.z 0.115
-        #     obstacle.primitive_poses = [pose]
+                        shape = shape_msgs.msg.SolidPrimitive()
+                        shape.type = 1  # Box
+                        length = 0.078
+                        width = 0.105
+                        height = 0.2286             #-(table.transform.translation.z - ally00.transform.translation.z)
+                        shape.dimensions = [length, width, height]
+                        obstacle.primitives = [shape]
 
-        #     obstacle.header.frame_id = self.moveit.config.base_frame_id
+                        pose = geometry_msgs.msg.Pose()
+                        pose.position.x = self.detected_allies[i].tf.transform.translation.x
+                        pose.position.y = self.detected_allies[i].tf.transform.translation.y
+                        pose.position.z = -0.091 + (height/2) #table.transform.translation.z 0.115
+                        obstacle.primitive_poses = [pose]
 
+                        obstacle.header.frame_id = self.moveit.config.base_frame_id
+                        obstacle_list.append(obstacle)
 
-        #     self.moveit.update_obstacles([obstacle], delete=False)
+                    self.moveit.update_obstacles(obstacle_list, delete=False)
 
-        #     self.state = State.LOOK_FOR_ENEMY
+            self.find_allies()
+            self.state = State.LOOK_FOR_ENEMY
 
 
         elif self.state == State.LOOK_FOR_ENEMY:
@@ -600,7 +633,7 @@ class RobotControl(Node):
 
                         self.left_knock_enemy_waypoint = geometry_msgs.msg.Pose()
                         self.left_knock_enemy_waypoint.position.x = x_pos - (self.lightsaber_full_length*0.75)
-                        self.left_knock_enemy_waypoint.position.y = y_pos            #adding slight offset (slightly more than half the block width)
+                        self.left_knock_enemy_waypoint.position.y = y_pos - 0.05           #adding slight offset (slightly more than half the block width)
                         self.left_knock_enemy_waypoint.position.z = -self.table_offset + height + 0.1
                         self.left_knock_enemy_waypoint.orientation.x = math.pi
                         self.left_knock_enemy_waypoint.orientation.z = -math.pi/16
@@ -615,14 +648,14 @@ class RobotControl(Node):
                         #right waypoint
                         self.right_goal_waypoint.position.x = x_pos - (self.lightsaber_full_length*0.75)
                         self.right_goal_waypoint.position.y = y_pos - 0.16            #adding slight offset (slightly more than half the block width)
-                        self.right_goal_waypoint.position.z = -self.table_offset + height + 0.1 
+                        self.right_goal_waypoint.position.z = -self.table_offset + height + 0.1
                         self.get_logger().info(f'goal z: {self.right_goal_waypoint.position.z}')
                         self.right_goal_waypoint.orientation.x = math.pi
                         self.right_goal_waypoint.orientation.z = -math.pi/16
 
                         self.right_knock_enemy_waypoint = geometry_msgs.msg.Pose()
                         self.right_knock_enemy_waypoint.position.x = x_pos - (self.lightsaber_full_length*0.75)
-                        self.right_knock_enemy_waypoint.position.y = y_pos           #adding slight offset (slightly more than half the block width)
+                        self.right_knock_enemy_waypoint.position.y = y_pos + 0.05          #adding slight offset (slightly more than half the block width)
                         self.right_knock_enemy_waypoint.position.z = -self.table_offset + height + 0.1
                         self.right_knock_enemy_waypoint.orientation.x = math.pi
                         self.right_knock_enemy_waypoint.orientation.z = -math.pi/16
@@ -676,19 +709,23 @@ class RobotControl(Node):
                         self.num_moves_completed += 1
                         if self.num_moves_completed % self.num_movements == 0:
                             self.num_waypoints_completed += 1
+                        if self.num_moves_completed == 1:
+                            self.config.max_velocity_scaling_factor = self.default_speed + 0.4
+                        else:
+                            self.config.max_velocity_scaling_factor = self.default_speed
                     except:
                         self.get_logger().info("back to idle!")
                         self.state = State.IDLE
                         pass
         
         elif self.state == State.RIGHT_DYNAMIC_MOTION:
+            self.sign = -1
             # self.get_logger().info(f'Moveit State: {self.moveit._state}')
             self.get_logger().info(f'Moveit State: {self.moveit._plan_state}')
             self.get_logger().info("Right Dyanmic Motion")
-            self.get_logger().info(f'Idle?: {self.moveit.plan_idle}')
             self.get_logger().info(f'num_waypoints completed: {self.num_waypoints_completed}')
             self.get_logger().info(f'num moves completed: {self.num_moves_completed}')
-            if self.moveit.planning or not self.moveit.plan_idle:
+            if self.moveit.planning:
                 self.state = State.WAYPOINTS_WAIT
                 self.get_logger().info("waypoints wait!")
             # elif self.moveit.get_last_error() != MoveItApiErrors.NO_ERROR:
@@ -705,6 +742,10 @@ class RobotControl(Node):
                         self.num_moves_completed += 1
                         if self.num_moves_completed % self.num_movements == 0:
                             self.num_waypoints_completed += 1
+                        if self.num_moves_completed == 1:
+                            self.config.max_velocity_scaling_factor = self.default_speed + 0.4
+                        else:
+                            self.config.max_velocity_scaling_factor = self.default_speed
                     except:
                         self.get_logger().info("back to idle!")
                         self.state = State.IDLE
@@ -742,7 +783,6 @@ class RobotControl(Node):
 
         elif self.state == State.STAB_MOTION:
             self.get_logger().info("Stab Motion")
-            self.is_stab_motion = True
             joint_waypoints = []
             if self.moveit.planning:
                 self.state = State.WAYPOINTS_WAIT
@@ -767,11 +807,11 @@ class RobotControl(Node):
                                             ]
 
                     self.waypoint_joints2 = [self.rotate[i],        #ONLY CHANGE THIS ONE(rotate panda_joint1)
-                                            math.radians(-50),    # panda_joint2
+                                            math.radians(-31),    # panda_joint2
                                             math.radians(-1),                    # panda_joint3
-                                            math.radians(-165),     # panda_joint4
+                                            math.radians(-156),     # panda_joint4
                                             math.radians(0),                    # panda_joint5
-                                            math.radians(108),     # panda_joint6
+                                            math.radians(125),     # panda_joint6
                                             math.radians(45),     # panda_joint7
                                                                     # TODO - This might open the gripper when we try to move home
                                                                     # CAREFUL!
@@ -781,11 +821,11 @@ class RobotControl(Node):
 
 
                     self.waypoint_joints3 = [self.rotate[i],        #ONLY CHANGE THIS ONE(rotate panda_joint1)
-                                            math.radians(-50 + ((100/0.4826)*self.x_disp[i])),    # panda_joint2     0.4826 meters is width of block table and 107 deg is the total degrees this joint changes to reach end of table
+                                            math.radians(-31 + ((80/0.4826)*self.x_disp[i])),    # panda_joint2     0.4826 meters is width of block table and 107 deg is the total degrees this joint changes to reach end of table
                                             math.radians(-1),                    # panda_joint3
-                                            math.radians(-165 + ((100/0.4826)*self.x_disp[i])),     # panda_joint4
+                                            math.radians(-156 + ((80/0.4826)*self.x_disp[i])),     # panda_joint4
                                             math.radians(0),       # panda_joint5
-                                            math.radians(108 - ((8/0.4826)*self.x_disp[i])),     # panda_joint6
+                                            math.radians(125 - ((6/0.4826)*self.x_disp[i])),     # panda_joint6
                                             math.radians(45),     # panda_joint7
                                                                     # TODO - This might open the gripper when we try to move home
                                                                     # CAREFUL!
@@ -794,11 +834,11 @@ class RobotControl(Node):
                                             ]
 
                     self.waypoint_joints4 = [self.rotate[i],        #ONLY CHANGE THIS ONE(rotate panda_joint1)
-                                            math.radians(-50),    # panda_joint2
+                                            math.radians(-31),    # panda_joint2
                                             math.radians(-1),                    # panda_joint3
-                                            math.radians(-165),     # panda_joint4
+                                            math.radians(-156),     # panda_joint4
                                             math.radians(0),                    # panda_joint5
-                                            math.radians(108),     # panda_joint6
+                                            math.radians(125),     # panda_joint6
                                             math.radians(45),     # panda_joint7
                                                                     # TODO - This might open the gripper when we try to move home
                                                                     # CAREFUL!
@@ -829,7 +869,7 @@ class RobotControl(Node):
                 self.waypoints += 1
 
         elif self.state == State.WAYPOINTS_WAIT:
-            self.get_logger().info(f'Moveit State: {self.moveit._plan_state}')
+           # self.get_logger().info(f'Moveit State: {self.moveit._plan_state}')
             # self.get_logger().info(f'Moveit State: {self.moveit._state}')
             # once we're not planning anymore, get the plan and move on to execute stage
             # self.get_logger().info(f'moveit state: {self.moveit.')
@@ -841,27 +881,41 @@ class RobotControl(Node):
                 # we could also just call the execution method, which would
                 # execute the last planned trajectory
                 self.plan = self.moveit.get_plan()
-                if self.moveit.get_last_error() == MoveItApiErrors.CONTROL_ERROR:
-                    if self.sign == 1:
-                        self.state = State.LEFT_DYNAMIC_MOTION
-                    elif self.sign == -1 and not self.is_stab_motion:
-                        self.state = State.RIGHT_DYNAMIC_MOTION
-                    else:
-                        self.state = State.STAB_MOTION
-                elif self.moveit.get_last_error() == MoveItApiErrors.NO_ERROR:
+                # if self.moveit.get_last_error() == MoveItApiErrors.CONTROL_ERROR:
+                #     if self.sign == 1:
+                #         self.state = State.LEFT_DYNAMIC_MOTION
+                #     elif self.sign == -1 and not self.is_stab_motion:
+                #         self.state = State.RIGHT_DYNAMIC_MOTION
+                #     else:
+                #         self.state = State.STAB_MOTION
+                if self.moveit.get_last_error() == MoveItApiErrors.NO_ERROR:
                     self.state = State.EXECUTE_START
                     self.get_logger().info("start execute!")
-                elif self.sign == 1:
+                elif self.sign == 1 and self.num_moves_completed == 0:
                     self.sign = -1
                     self.num_moves_completed = 0
                     self.num_waypoints_completed = 0
                     self.state = State.RIGHT_DYNAMIC_MOTION
                     self.get_logger().info("other dynamic motion!")
-                elif not self.is_stab_motion:
+                elif self.sign == 1:
+                    self.sign = -1
+                    self.num_moves_completed = 0
+                    self.num_waypoints_completed = 0
+                    self.state = State.MOVE_TO_HOME_START
+                    # self.state = State.RIGHT_DYNAMIC_MOTION
+                    self.get_logger().info("back to home!")
+                elif not self.is_stab_motion and self.num_moves_completed == 0:
+                    self.is_stab_motion = True
                     self.num_moves_completed = 0
                     self.num_waypoints_completed = 0
                     self.state = State.STAB_MOTION
                     self.get_logger().info("stab motion!")
+                elif not self.is_stab_motion:
+                    self.is_stab_motion = True
+                    self.num_moves_completed = 0
+                    self.num_waypoints_completed = 0
+                    self.state = State.MOVE_TO_HOME_START
+                    self.get_logger().info("back to home!")
                 else:
                     self.get_logger().info("no solution!")
                     self.state = State.IDLE
@@ -972,7 +1026,7 @@ class RobotControl(Node):
 
            # once we're not executing anymore, return to IDLE
             if not self.moveit.busy:
-                time.sleep(2)
+               # time.sleep(2)
                 self.get_logger().info(f'num movements: {self.num_movements}')
                 self.get_logger().info(f'num moves completed: {self.num_moves_completed}')
                 self.get_logger().info(f'FUCK!!!!')
@@ -1222,12 +1276,12 @@ class RobotControl(Node):
         return response
 
     def look_for_enemy_callback(self, request, response):
-        if self.obstacles_added == 0:
-            self.state = State.SETUP
-        else:
-            self.state = State.LOOK_FOR_ENEMY
-            self.num_waypoints_completed = 0
-            self.num_waypoints_completed = 0
+        # if self.obstacles_added == 0:
+        #     self.state = State.SETUP
+        # else:
+        self.state = State.FIND_ALLIES
+        self.num_waypoints_completed = 0
+        self.num_waypoints_completed = 0
         return response
 
     def gripper_open_callback(self, request, response):
@@ -2058,6 +2112,7 @@ class RobotControl(Node):
         # x is forward to backward
         enemy_to_ally = DetectedObjectData(enemy_obj)
         for ally in self.detected_allies:
+            self.get_logger().info(f'detecting: {len(self.detected_allies)}')
             enemy_to_ally = self.tf_buffer.lookup_transform(ally.obj.name, enemy_obj.obj.name, rclpy.time.Time())
             dist_y = enemy_to_ally.transform.translation.y
             dist_x = enemy_to_ally.transform.translation.x
@@ -2085,8 +2140,9 @@ class RobotControl(Node):
                 self.get_logger().info(f'dist_y factor {(dist_y-0.5*self.block_width)}, {(self.block_height+self.block_width*0.5)}')
                 self.get_logger().info(f'dist_x factor {(abs(dist_x)-0.5*self.block_width)}, {self.block_width}')
                 if ((abs(dist_x)-0.5*self.block_width) < self.block_width) and ((dist_y-0.5*self.block_width) < (self.block_height+self.block_width*0.5)):
-                    self.get_logger().info(f'not safe to attack in stabbing style')
-                    return False
+                    if (dist_y>=0):
+                        self.get_logger().info(f'not safe to attack in stabbing style')
+                        return False
             self.get_logger().info(f'safe to attack in style {swing_style}')
         return True
 

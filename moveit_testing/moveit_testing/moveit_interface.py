@@ -14,18 +14,15 @@
 
 """
 MoveIt Python API.
-
 Description: This API is used to interact with MoveIt to add obstacles to the environment,
              plan a trajectory avoiding any present obstacles, and execute the trajectory that was
              planned. Functions are available for users to input goal poses for the end-effector
              that include orientation and/or position. Error codes are returned to indicate invalid
              usage/behavior of the API functions.
-
 Parameters passed into the API:
     node:   pass in the node that calls the functions contained in this API
     config: the custom parameters contained within the MoveConfig() class that must
             be specified by the user
-
 Publishers:
     planning_scene (moveit_msgs/msg/PlanningScene): publish obstacles
 Subscribers:
@@ -35,13 +32,11 @@ Clients:
     move_action (moveit_msgs/action/MoveGroup): get plan message
     execute_trajectory (moveit_msgs/action/ExecuteTrajectory): get execute message
     get_planning_scene (moveit_msgs/srv/GetPlanningScene): get plan scene message
-
 Authors:
     Megan Sindelar
     Nick Morales
     Sushma Chandra
     Vaishnavi Dornadula
-
 Last Updated: November 10th, 2022
 """
 
@@ -77,7 +72,7 @@ import shape_msgs.msg
 import rclpy
 from tf2_ros.buffer import Buffer
 from tf2_ros.transform_listener import TransformListener
-import trajectory_msgs.msg
+import time
 
 # TODO - change to use SMACH?
 class _State(Enum):
@@ -105,6 +100,7 @@ class _ExecState(Enum):
     WAIT_FOR_READY = auto(),
     WAIT_FOR_EXEC_ACK = auto(),
     WAIT_FOR_EXEC_COMPLETE = auto(),
+    POST_EXECUTION_DELAY = auto()
 
 
 class _ObstacleState(Enum):
@@ -124,7 +120,6 @@ class MoveItApiErrors(Enum):
     IK_RESULT_ERROR = 3,
     PLAN_ERROR = 4,
     EXEC_ERROR = 5,
-    CONTROL_ERROR = 6,
     EMPTY_JOINT_HOME_POSITIONS = 20,
 
 
@@ -145,16 +140,15 @@ class MoveConfig():
     tolerance = 0.001 #0.1
     home_joint_positions = []  # Must be in the same order as in the joint state message
                                # TODO - improve? also input joint names?
+    cycle_count = 2
 
 
 class MoveIt():
     """
     MoveIt Python API.
-
     Contains the necessary variables and functions to take in parameters
     such as end effector position/orientation and plan and/or execute that trajectory.
     Users are also able to place objects in the planning scene.
-
     Publishers:
         planning_scene (moveit_msgs/msg/PlanningScene): publish obstacles
     Subscribers:
@@ -164,7 +158,6 @@ class MoveIt():
         move_action (moveit_msgs/action/MoveGroup): get plan message
         execute_trajectory (moveit_msgs/action/ExecuteTrajectory): get execute message
         get_planning_scene (moveit_msgs/srv/GetPlanningScene): get plan scene message
-
     Parameters passed into the API:
         node:   pass in the node that calls the functions contained in this API
         config: the custom parameters contained within the MoveConfig() class that must
@@ -232,12 +225,11 @@ class MoveIt():
 
         self.check_obstacles = 0
 
-        self.plan_idle = False
-
-        self.desired_joint_state = []
-
         self.completed = False
 
+        self.joint_past = [0,0,0,0,0,0,0,0,0,0]
+
+        self.iterations = 0
 
         # # ----------------- Sample Collision Object -------------------- #
         # obstacle_pose1 = geometry_msgs.msg.Pose()
@@ -274,19 +266,14 @@ class MoveIt():
     def handle(self):
         """
         External function to cyclically handle MoveIt interactions.
-
         This must be called in a timer callback.
-
         Moves between IDLE, PLANNING, EXECUTING, and OBSTACLE states to keep track of which
         related MoveIt Interation is being affected
-
         Args:
             none
-
         Returns
         -------
             no returns
-
         """
         self._get_transform()
 
@@ -306,6 +293,14 @@ class MoveIt():
         
         if self._state != _State.EXECUTING:
             self._exec_state = _ExecState.IDLE
+
+        # Set externally accessible status variables
+        self.busy = not (self._state == _State.IDLE 
+                    and self._plan_state == _PlanState.IDLE 
+                    and self._exec_state == _ExecState.IDLE)
+        self.planning = self._state == _State.PLANNING
+        self.executing = self._state == _State.EXECUTING
+        self.planning_and_executing = (self.planning or self.executing) and self._plan_and_execute
 
         # State Machine
         if self._state == _State.IDLE:
@@ -342,24 +337,16 @@ class MoveIt():
 
         self._obs_sequence()
 
-        # Set externally accessible status variables
-        self.busy = not (self._state == _State.IDLE)
-        self.planning = self._state == _State.PLANNING
-        self.plan_idle = self._plan_state == _PlanState.IDLE
-        self.executing = self._state == _State.EXECUTING
-        self.planning_and_executing = (self.planning or self.executing) and self._plan_and_execute
+        
 
     def _get_transform(self):
         """
         Get robot transformation from base frame to end-effector frame.
-
         Args:
             none
-
         Returns
         -------
             no returns
-
         """
         try:
             self._base_endeffector = self._tf_buffer.lookup_transform(
@@ -372,35 +359,26 @@ class MoveIt():
     def _sub_joint_state_callback(self, msg):
         """
         To get joint states of the robot.
-
         Callback function for /joint_states (sensor_msgs/msg/JointState) topic
-
         Args:
             msg: the data from the topic /joint_states
-
         Returns
         -------
             no returns
-
         """
         self._joint_states = msg
-        self._node.get_logger().info(f'joint states PLEASE!: {self._joint_states.position}')
       #  self._node.get_logger().info(f'start: {self._joint_states}')
 
     def _obs_sequence(self):
         """
         Publish obstacles into the planning scene by running through Obstacle state machine.
-
         Publishes:
             planning_scene (moveit_msgs/msg/PlanningScene): publish obstacles
-
         Args:
             none
-
         Returns
         -------
             no returns
-
         """
         new_state = self._obs_state != self._obs_state_last
 
@@ -436,18 +414,14 @@ class MoveIt():
     def _plan_sequence(self):
         """
         Run plan subsequence.
-
         Called by the handle function while in the planning state. Checks completion
         of async functions to move between plan states and saves the plan output into
         internal variable, self._plan
-
         Args:
             none
-
         Returns
         -------
             no returns
-
         """
         new_plan_state = self._plan_state != self._plan_state_last
 
@@ -461,9 +435,8 @@ class MoveIt():
         if self._plan_state == _PlanState.START_IK_COMPUTE:
             if new_plan_state:
                 # Trigger compute IK once at start of state
-                self._node.get_logger().info(f"start pose: {self._start_pose}")
                 self._ik_request(self._joint_states, self._start_pose)
-                
+
             # wait for IK to finish
             if self._ik_future.done():
 
@@ -492,6 +465,7 @@ class MoveIt():
                 # Trigger compute IK once at start of state
                 # self._node.get_logger().info(f'goal pose: {type(self._goal_pose)}')
                 self._ik_request(self._start_joint_states, self._goal_pose)
+
             # wait for IK to finish
             if self._ik_future.done():
 
@@ -519,7 +493,6 @@ class MoveIt():
             # if self._move_action_client.server_is_ready(), then move to start
             if self._move_action_client.server_is_ready():
                 # send the goal plan through the move action client
-                self._node.get_logger().info("wat")
                 self._plan_future = \
                     self._move_action_client.send_goal_async(self._assemble_plan_message(self._attached_obstacles))
                 self._plan_state = _PlanState.WAIT_FOR_PLAN_ACK
@@ -543,51 +516,23 @@ class MoveIt():
                     self._node.get_logger().error(
                         "Plan result returned an error code other than SUCCESS(1)")
                     self._node.get_logger().error(f'Plan error code: {self._plan.error_code.val}')
-                    # if self._plan.error_code.val == -4:
-                    #     self._start_joint_states = self._joint_states
-                    #     self._error = MoveItApiErrors.CONTROL_ERROR
-                    #     self._node.get_logger().error(f"Control error {self._error}")
-                    #     # self._plan_future = \
-                    #     # self._move_action_client.send_goal_async(self._assemble_plan_message(self._attached_obstacles))
-                    #     # if self._plan_future.done():
-                    #     #     self._error = MoveItApiErrors.NO_ERROR
-                    #     self._start_joint_states = self._joint_states
-                    #     self._node.get_logger().info(f'joint states:: {self._joint_states}')
-
-                    #     # if self._start_pose is None:
-                    #     #     self._plan_state = _PlanState.START_IK_COMPUTE
-                    #     # else:
-                    #     #     self._plan_state = _PlanState.WAIT_FOR_READY
-                    #     self.reset_robot_state()
-                    #     if self._move_to_home:
-                    #         self.move_to_home()
-                    #     # self._state = _State.PLANNING
-                    #     self._node.get_logger().error(f"State {self._state}")
-                    # else:
-                    #     self._state = _State.IDLE
                 else:
                     self._error = MoveItApiErrors.NO_ERROR
                     self._excecution_complete = 1
                 # go back to IDLE
                 self._state = _State.IDLE
-                
-            self._node.get_logger().error(f"State {self._state}")
 
     def _exec_sequence(self):
         """
         Run execute subsequence.
-
         Called by the handle function while in the execute state. Checks competion
         of async functions to move between execute states and saves the plan output into
         internal variable, self.movement_result
-
         Args:
             none
-
         Returns
         -------
             no returns
-
         """
         new_exec_state = self._exec_state != self._exec_state_last
 
@@ -620,34 +565,6 @@ class MoveIt():
                 # Store movement result
                 self.movement_result = copy.deepcopy(self._exec_result_future.result().result)
 
-                #idea: look to see if every 10th or so joint state is within tolerance
-                self._node.get_logger().info('HERE!!!!!!!!!!!!!!!!!')
-                self._node.get_logger().info('HERE!!!!!!!!!!!!!!!!!')
-                self._node.get_logger().info('HERE!!!!!!!!!!!!!!!!!')
-                self._node.get_logger().info('HERE!!!!!!!!!!!!!!!!!')
-                self._node.get_logger().info('HERE!!!!!!!!!!!!!!!!!')
-                self._node.get_logger().info('HERE!!!!!!!!!!!!!!!!!')
-                self._node.get_logger().info('HERE!!!!!!!!!!!!!!!!!')
-                self._node.get_logger().info('HERE!!!!!!!!!!!!!!!!!')
-                self._node.get_logger().info('HERE!!!!!!!!!!!!!!!!!')
-                self._node.get_logger().info('HERE!!!!!!!!!!!!!!!!!')
-                self._node.get_logger().info('HERE!!!!!!!!!!!!!!!!!')
-                self._node.get_logger().info('HERE!!!!!!!!!!!!!!!!!')
-                self._node.get_logger().info('HERE!!!!!!!!!!!!!!!!!')
-                self._node.get_logger().info('HERE!!!!!!!!!!!!!!!!!')
-                self._node.get_logger().info('HERE!!!!!!!!!!!!!!!!!')
-                self._node.get_logger().info('HERE!!!!!!!!!!!!!!!!!')
-                self._node.get_logger().info('HERE!!!!!!!!!!!!!!!!!')
-                self._node.get_logger().info('HERE!!!!!!!!!!!!!!!!!')
-                self._node.get_logger().info('HERE!!!!!!!!!!!!!!!!!')
-                self._node.get_logger().info('HERE!!!!!!!!!!!!!!!!!')
-                self._node.get_logger().info('HERE!!!!!!!!!!!!!!!!!')
-                self._node.get_logger().info(f'joint points: {self._assemble_exec_message().trajectory.joint_trajectory.points[0].positions}')
-                self._node.get_logger().info(f'joint points: {self._assemble_exec_message().trajectory.joint_trajectory.points[0].positions[0]}')
-                self._node.get_logger().info(f'joint poses: {self._joint_states.position}')
-
-                self.desired_joint_state = self._assemble_exec_message().trajectory.joint_trajectory.points[0].positions
-
                 if self.movement_result.error_code.val != 1:
                     self._error = MoveItApiErrors.EXEC_ERROR
                     self._node.get_logger().error("Execute result returned an" +
@@ -656,29 +573,45 @@ class MoveIt():
                         f'Execute error code: {self.movement_result.error_code.val}')
                 else:
                     self._error = MoveItApiErrors.NO_ERROR
+                    self._exec_state = _ExecState.POST_EXECUTION_DELAY
 
+                # self._node.get_logger().info(f'past positions: {self.joint_past}')
+                # if self.iterations % 10:
+                #     for i in range(len(self._joint_states.position)):
+                #         if (self._joint_states.position[i] < self.joint_past[i] + 0.01) and (self._joint_states.position[i] > self.joint_past[i] - 0.01):
+                #             self.completed = True
+                #         else:
+                #             self.completed = False
+                #     self.iterations += 1
+                #     self.joint_past = self._joint_states.position
+                # else:
+                #     self.iterations += 1
+                #     #     # return back to IDLE state to get ready for next target
 
-            for i in range(len(self.desired_joint_state)):
-                if (self._joint_states.position[i] < self.desired_joint_state[i] + 0.01) and (self._joint_states.position[i] > self.desired_joint_state[i] - 0.01):
-                    self.completed = True
+                # self._node.get_logger().info(f'completed? {self.completed}')
+                # if self.completed:
+                #     self._node.get_logger().info(f'joint points: {self.joint_past}')
+                #     self._node.get_logger().info(f'joint poses: {self._joint_states.position}')
+                #     self._node.get_logger().error('changing to idle')
+                #     self._state = _State.IDLE
+                #     self.completed = False
+
+        elif self._exec_state == _ExecState.POST_EXECUTION_DELAY:
+                if new_exec_state:
+                    self.count = 0
+                if self.count < MoveConfig.cycle_count:
+                    self.count += 1
                 else:
-                    self.completed = False
-            #     # return back to IDLE state to get ready for next target
-            self._node.get_logger().error(f'completed? {self.completed}')
-            if self.completed:
-                self._node.get_logger().info(f'joint points: {self.desired_joint_state}')
-                self._node.get_logger().info(f'joint poses: {self._joint_states.position}')
-                self._node.get_logger().error('changing to idle')
-                self._state = _State.IDLE
-                self.completed = False
+                    self._state = _State.IDLE
+
+                # return back to IDLE state to get ready for next target
+                # self._state = _State.IDLE
 
     def _plan_traj(self, goal_pose, start_pose=None, execute=False):
         """
         Start the trajectory planning process.
-
         Internal function is called by externally accessible functions where the user can
         specify position and or orientation of the end effector.
-
         Args:
             goal_pose:  a geometry Pose and/or Orientation variable that specifies where
             start_pose: (optional) if none is specified, then use the current configuration
@@ -686,12 +619,10 @@ class MoveIt():
                         Pose with x, y, z
             execute:    (optional) defaults to false, indicating that it will only plan, not plan
                         and execute
-
         Returns
         -------
             self._error: an error code indicating success or specified failure of
                          type enum ERROR_CODES
-
         """
         # makes sure that we are IDLE before planning a task
         if self._state != _State.IDLE:
@@ -718,7 +649,6 @@ class MoveIt():
     def plan_traj_to_pose(self, goal_pose, start_pose=None, execute=False):
         """
         Plan a trajectory with the full input pose.
-
         Args:
             goal_pose:  a geometry Pose and/or Orientation variable that specifies where
             start_pose: (optional) if none is specified, then use the current configuration
@@ -726,11 +656,9 @@ class MoveIt():
                         Pose with x, y, z
             execute:    (optional) defaults to false, indicating that it will only plan, not plan
                         and execute
-
         Returns
         -------
             error of type enum ERROR_CODES provided from _plan_traj function
-
         """
         # TODO any further logic to set the input goal pose for _plan_traj function
         return self._plan_traj(goal_pose=goal_pose, start_pose=start_pose, execute=execute)
@@ -738,7 +666,6 @@ class MoveIt():
     def plan_traj_to_position(self, goal_position, start_pose=None, execute=False):
         """
         Plan a trajectory with only an input position specified.
-
         Args:
             goal_pose:  a geometry Pose and/or Orientation variable that specifies where
             start_pose: (optional) if none is specified, then use the current configuration
@@ -746,11 +673,9 @@ class MoveIt():
                         Pose with x, y, z
             execute:    (optional) defaults to false, indicating that it will only plan, not plan
                         and execute
-
         Returns
         -------
             error of type enum ERROR_CODES provided from _plan_traj function
-
         """
         goal_pose = geometry_msgs.msg.Pose()
         goal_pose.position = copy.deepcopy(goal_position)
@@ -767,7 +692,6 @@ class MoveIt():
     def plan_traj_to_orientation(self, goal_orientation, start_pose=None, execute=False):
         """
         Plan a trajectory with only an input orientation specified.
-
         Args:
             goal_pose:  a geometry Pose and/or Orientation variable that specifies where
             start_pose: (optional) if none is specified, then use the current configuration
@@ -775,11 +699,9 @@ class MoveIt():
                         Pose with x, y, z
             execute:    (optional) defaults to false, indicating that it will only plan, not plan
                         and execute
-
         Returns
         -------
             error of type enum ERROR_CODES provided from _plan_traj function
-
         """
         goal_pose = geometry_msgs.msg.Pose()
         # goal_pose.orientation = goal_orientation
@@ -799,15 +721,12 @@ class MoveIt():
     def exec_traj(self, plan=None):
         """
         Execute a trajectory.
-
         Args:
             plan: If the plan argument is passed in, use that plan. Otherwise use
                   the internally saved plan.
-
         Returns
         -------
             none
-
         """
         if self._state != _State.IDLE:
             # TODO - return some form of error, we are busy
@@ -829,7 +748,6 @@ class MoveIt():
     def move_to_home(self):
         """
         Plan and execute a move to the home position
-
         TODO - finish docstring
         """
 
@@ -865,26 +783,21 @@ class MoveIt():
     def get_plan(self):
         """
         Return the currently stored plan.
-
         We can use this if we want to calculate multiple plans at one time and then
         execute them without having to plan in between each one. The higher level
         node would store the plans somewhere and then pass them back into our execute
         trajectory method.
-
         Args:
             none
-
         Returns
         -------
             self._plan - the current plan saved from the plan state machine
-
         """
         return self._plan
 
     def _ik_request(self, start_joint_states, goal_pose):
         """
         Request the inverse kinematics from the compute_ik service.
-
         Args:
         ----
             start_joint_states: the start position of the robots provided by the joint
@@ -894,7 +807,6 @@ class MoveIt():
         Returns
         -------
             none
-
         """
         # Build IK message
         ik_message = moveit_msgs.msg.PositionIKRequest()
@@ -913,56 +825,15 @@ class MoveIt():
 
         self._ik_start_sec = self._node.get_clock().now().seconds_nanoseconds()[0]
 
-    # def reset_robot_state(self):
-    #     assemble_msg = moveit_msgs.action.MoveGroup.Goal()
-
-    #     header = std_msgs.msg.Header()
-    #     header.frame_id = self.config.base_frame_id
-    #     header.stamp = self._node.get_clock().now().to_msg()
-
-    #     assemble_msg.request.workspace_parameters.header = header
-    #     assemble_msg.request.workspace_parameters.min_corner = self.config.workspace_min_corner
-    #     assemble_msg.request.workspace_parameters.max_corner = self.config.workspace_max_corner
-    #     assemble_msg.request.start_state.joint_state = self._start_joint_states
-    #     # assemble_msg.planning_options.planning_scene_diff.is_diff = True
-    #     self._node.get_logger().info(f"start joint states: {self._start_joint_states}")
-    #     assemble_msg.planning_options.planning_scene_diff.robot_state.is_diff = True
-    #     assemble_msg.planning_options.planning_scene_diff.robot_state.joint_state = self._start_joint_states
-    #     assemble_msg.request.goal_constraints = \
-    #         _joint_states_to_goal_constraints(self._goal_joint_states,
-    #                                           self.config.tolerance)
-
-    #     assemble_msg.request.pipeline_id = self.config.pipeline_id
-    #     assemble_msg.request.group_name = self.config.group_name
-    #     assemble_msg.request.num_planning_attempts = self.config.num_planning_attempts
-    #     assemble_msg.request.allowed_planning_time = self.config.allowed_planning_time
-    #     assemble_msg.request.max_velocity_scaling_factor = self.config.max_velocity_scaling_factor
-    #     assemble_msg.request.max_acceleration_scaling_factor = \
-    #         self.config.max_acceleration_scaling_factor
-
-    #     # obstacle avoidance
-    #     # assemble_msg.planning_options.planning_scene_diff.world.collision_objects = \
-    #     #     self.obstacles.world.collision_objects
-
-    #     assemble_msg.planning_options.plan_only = not self._plan_and_execute
-    #     if self._move_action_client.server_is_ready():
-    #         # send the goal plan through the move action client
-    #         self._node.get_logger().info("wat")
-    #         self._plan_future = \
-    #             self._move_action_client.send_goal_async(assemble_msg)
-
     def _assemble_plan_message(self, attached_collision_objects):
         """
         Generate plan request message from start position to goal pose.
-
         Args:
             none
-
         Returns
         -------
             assemble_msg: a moveit_msgs.action.MoveGroup.Goal() that can be asyncronously
                           called in the planning state machine to generate a plan
-
         """
         assemble_msg = moveit_msgs.action.MoveGroup.Goal()
 
@@ -974,11 +845,10 @@ class MoveIt():
         assemble_msg.request.workspace_parameters.min_corner = self.config.workspace_min_corner
         assemble_msg.request.workspace_parameters.max_corner = self.config.workspace_max_corner
         assemble_msg.request.start_state.joint_state = self._start_joint_states
-        # assemble_msg.planning_options.planning_scene_diff.is_diff = True
        # assemble_msg.request.start_state.attached_collision_objects = attached_collision_objects
        # assemble_msg.planning_options.planning_scene_diff.
        # assemble_msg.planning_options.planning_scene_diff.robot_state.attached_collision_objects = attached_collision_objects
-
+        
         if len(attached_collision_objects) >= 1:
             #acm = moveit_msgs.msg.AllowedCollisionMatrix()
             assemble_msg.request.start_state.is_diff = True
@@ -1028,15 +898,12 @@ class MoveIt():
     def _assemble_exec_message(self):
         """
         Generate execute request message from saved plan trajectory.
-
         Args:
             none
-
         Returns
         -------
             assemble_msg - variable of type moveit_msgs.action.ExecuteTrajectory.Goal() that
                 is populated with the planned trajectory created in the plan state machine
-
         """
         assemble_msg = moveit_msgs.action.ExecuteTrajectory.Goal()
         assemble_msg.trajectory = self._plan.planned_trajectory
@@ -1047,14 +914,11 @@ class MoveIt():
     def _update_collision_object(self):
         """
         Add, update, or delete obstacles (internal).
-
         Args:
             none
-
         Returns
         -------
             none
-
         """
         if self._attached_obstacles:
             # add to planning scene's attached collision object list
@@ -1091,15 +955,12 @@ class MoveIt():
     def update_obstacles(self, obstacle_list, delete=False):
         """
         Add, modify, or delete obstacles in the planning scene.
-
         Args:
             obstacle_list: list of obstacles, each of type moveit_msgs.msg.CollisionObject()
             delete:        a boolean variable to specify whether to delete the obstacles
-
         Returns
         -------
             none
-
         """
         if self._obs_state != _ObstacleState.IDLE:
             # TODO - return some form of error, we are busy
@@ -1113,7 +974,6 @@ class MoveIt():
     def update_attached_obstacles(self, attached_obstacle_list, delete=False):
         """
         Add an attached obstacle 
-
         Args:
             attached_obstacle_list: object of type moveit_msgs.msg.AttachedCollisionObject()
                                     to add to the Planning Scene
@@ -1137,16 +997,12 @@ class MoveIt():
     def get_last_error(self):
         """
         Return the last error recorded by the API.
-
         If last action was successful, this will be NO_ERROR
-
         Args:
             none
-
         Returns
         -------
             variable of type Enum MoveItApiErrors indicating error state
-
         """
         return self._error
 
@@ -1201,17 +1057,14 @@ class MoveIt():
 def _joint_states_to_goal_constraints(joint_state, tolerance):
     """
     Generate goal constrains given the IK joint states.
-
     Args:
         joint_state: the joint states given from the results of the inverse kinematics
                     computations
         tolerance:   provided by the configuration input from the user
-
     Returns
     -------
         goal_constraint: of type moveit_msgs.msg.Constraints to be used in the
                         _assemble_plan_message function's goal contraint parameter
-
     """
     joint_constraints = []
     for i in range(len(joint_state.name)):
