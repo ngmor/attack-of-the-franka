@@ -33,26 +33,17 @@ def generate_launch_description():
             PythonLaunchDescriptionSource(
                 PathJoinSubstitution([
                     FindPackageShare('attack_of_the_franka'),
-                    'launch',
                     'robot.launch.py'
                 ])
             ),
-            condition=UnlessCondition(LaunchConfiguration('simulation')),
+            launch_arguments=[('simulation', LaunchConfiguration('simulation'))]
         ),
         IncludeLaunchDescription(
             PythonLaunchDescriptionSource(
                 PathJoinSubstitution([
                     FindPackageShare('attack_of_the_franka'),
-                    'launch',
                     'realsense.launch.py'
                 ])
             ),
-            condition=UnlessCondition(LaunchConfiguration('simulation')),
         ),
-        Node(
-            package='attack_of_the_franka',
-            executable='robot_control',
-            parameters=[PathJoinSubstitution(
-            [FindPackageShare('attack_of_the_franka'), 'parameters.yaml'])],
-        )
     ])

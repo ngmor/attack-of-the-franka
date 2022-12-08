@@ -13,6 +13,7 @@ setup(
             'package.xml',
             'launch/realsense.launch.py',
             'launch/robot.launch.py',
+            'launch/attack_of_the_franka.launch.py',
             'config/apriltag.yaml',
             'config/apriltag.rviz',
             'config/parameters.yaml',

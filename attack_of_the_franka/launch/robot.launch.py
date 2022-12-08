@@ -40,7 +40,6 @@ def generate_launch_description():
             launch_arguments=[('robot_ip', 'dont-care'), ('use_fake_hardware', 'true')],
             condition=IfCondition(LaunchConfiguration('simulation')),
         ),
-        # TODO - remotely run node on station computer
         IncludeLaunchDescription(
             PythonLaunchDescriptionSource(
                 PathJoinSubstitution([
@@ -51,5 +50,11 @@ def generate_launch_description():
             ),
             launch_arguments=[('robot_ip', 'panda0.robot')],
             condition=UnlessCondition(LaunchConfiguration('simulation')),
+        ),
+        Node(
+            package='attack_of_the_franka',
+            executable='robot_control',
+            parameters=[PathJoinSubstitution(
+            [FindPackageShare('attack_of_the_franka'), 'parameters.yaml'])],
         ),
     ])
