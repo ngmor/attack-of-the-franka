@@ -20,10 +20,19 @@ from attack_of_the_franka_interfaces.msg import DetectedObject, Detections
 camera_scale_factor = 1.0 / 1000.0
 
 class Pixel():
+    """Camera image pixel information."""
+
     x = 0
     y = 0
 
     def get_from_camera_coordinates(self,intrinsics,point):
+        """
+        Convert 3D real world coordinates into pixel coordinates from the input point.
+
+        Args:
+            intrinsics (rs2.intrinsics): camera intrinsic information
+            point (Vector3 or Point): point in 3D real world coordinates of the camera frame.
+        """
         if intrinsics is None:
             return
 
@@ -33,6 +42,8 @@ class Pixel():
         self.y = int(pixel[1])
 
 class Limits():
+    """General use lower and upper limits structure."""
+
     lower = 0.
     upper = 0.
 
