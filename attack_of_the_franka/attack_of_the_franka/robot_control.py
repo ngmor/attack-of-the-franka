@@ -1963,7 +1963,7 @@ class RobotControl(Node):
 
         shape = shape_msgs.msg.SolidPrimitive()
         shape.type = 3  # Cylinder
-        shape.dimensions = [self.lightsaber_full_length, self.lightsaber_diameter, 0.2]
+        shape.dimensions = [self.lightsaber_full_length*1.05, self.lightsaber_diameter, 0.2]
         attached_obstacle.object.primitives = [shape]
 
         attached_obstacle.object.operation = attached_obstacle.object.ADD
