@@ -509,6 +509,7 @@ class RobotControl(Node):
         # State machine
         if self.state == State.IDLE:
             self.unreachable_enemies = []
+            self.looking_for_enemies = 0
 
         elif self.state == State.MOVE_TO_HOME_START:
 
@@ -529,8 +530,8 @@ class RobotControl(Node):
                 self.get_logger().info("dang it")
                 if self.movement_direction_sign == -1 and not self.is_stab_motion:
                     self.state = State.RIGHT_DYNAMIC_MOTION
-                elif self.is_stab_motion and self.num_moves_completed != self.num_movements:
-                    self.state = State.STAB_MOTION
+                # elif self.is_stab_motion and self.num_moves_completed != self.num_movements:
+                #     self.state = State.STAB_MOTION
                 else:
                     if self.looking_for_enemies:
                         self.state = State.CHECK_FOR_ENEMY_REMAINING
@@ -1505,7 +1506,7 @@ class RobotControl(Node):
         # no longer necessary since we're using the API home function
         self.goal_pose = copy.deepcopy(self.home_pose)
 
-        self.looking_for_enemies = False
+        self.looking_for_enemies = 0
         self.state = State.MOVE_TO_HOME_START
         self.get_logger().info("WHAT")
 
