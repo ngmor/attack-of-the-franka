@@ -67,6 +67,8 @@ class State(Enum):
 class PickupLightsaberState(Enum):
     """State machine for lightsaber pickup subsequence."""
 
+    ADD_WALLS_START = auto(),
+    ADD_WALLS_WAIT = auto(),
     REMOVE_ATTACHED_COLLISION_START = auto(),
     REMOVE_ATTACHED_COLLISION_WAIT = auto()
     ADD_SEPARATE_COLLISION_START = auto(),
@@ -330,7 +332,7 @@ class RobotControl(Node):
 
         self.state = State.IDLE
         self.state_last = None
-        self.pickup_lightsaber_state = PickupLightsaberState.REMOVE_ATTACHED_COLLISION_START
+        self.pickup_lightsaber_state = PickupLightsaberState.ADD_WALLS_START
         self.pickup_lightsaber_state_last = None
 
         self.joint_traj = trajectory_msgs.msg.JointTrajectory()
@@ -509,32 +511,32 @@ class RobotControl(Node):
                 else:
                     self.state = State.IDLE
 
-        elif self.state == State.SETUP:
-            try:
-                table1 = self.tf_buffer.lookup_transform(FRAMES.PANDA_BASE, FRAMES.WORK_TABLE1, rclpy.time.Time())
-                table1_here = True
-            except TransformException:
-                table1_here = False
-                return
-            try:
-                table2 = self.tf_buffer.lookup_transform(FRAMES.PANDA_BASE, FRAMES.WORK_TABLE2, rclpy.time.Time())
-                table2_here = True
-            except TransformException:
-                table2_here = False
-                return
+        # elif self.state == State.SETUP:
+        #     try:
+        #         table1 = self.tf_buffer.lookup_transform(FRAMES.PANDA_BASE, FRAMES.WORK_TABLE1, rclpy.time.Time())
+        #         table1_here = True
+        #     except TransformException:
+        #         table1_here = False
+        #         return
+        #     try:
+        #         table2 = self.tf_buffer.lookup_transform(FRAMES.PANDA_BASE, FRAMES.WORK_TABLE2, rclpy.time.Time())
+        #         table2_here = True
+        #     except TransformException:
+        #         table2_here = False
+        #         return
 
-            if table1_here and table2_here:
-                self.table1_x = table1.transform.translation.x
-                self.table1_z = table1.transform.translation.z
-                self.table_len_x = table2.transform.translation.x - table1.transform.translation.x + 0.1
-                self.table_len_y = abs(table1.transform.translation.y) + abs(table2.transform.translation.y) + 0.06
-                self.table_center_x = ((abs(table1.transform.translation.x - table2.transform.translation.x))/2) + table1.transform.translation.x
-                self.table_center_y = (table1.transform.translation.y + table2.transform.translation.y)/2
+        #     if table1_here and table2_here:
+        #         self.table1_x = table1.transform.translation.x
+        #         self.table1_z = table1.transform.translation.z
+        #         self.table_len_x = table2.transform.translation.x - table1.transform.translation.x + 0.1
+        #         self.table_len_y = abs(table1.transform.translation.y) + abs(table2.transform.translation.y) + 0.06
+        #         self.table_center_x = ((abs(table1.transform.translation.x - table2.transform.translation.x))/2) + table1.transform.translation.x
+        #         self.table_center_y = (table1.transform.translation.y + table2.transform.translation.y)/2
 
-                self.add_walls()
-                self.add_attached_lightsaber()
-                self.obstacles_added = 1
-                self.state = State.FIND_ALLIES
+        #         # self.add_walls()
+        #         self.add_attached_lightsaber()
+        #         self.obstacles_added = 1
+        #         self.state = State.FIND_ALLIES
 
 
         elif self.state == State.FIND_ALLIES:
@@ -947,7 +949,7 @@ class RobotControl(Node):
 
             # reset subsequence on first callback of PICKUP_LIGHTSABER state
             if new_state:
-                self.pickup_lightsaber_state = PickupLightsaberState.REMOVE_ATTACHED_COLLISION_START
+                self.pickup_lightsaber_state = PickupLightsaberState.ADD_WALLS_START
 
             # Execute subsequence to pickup the lightsaber
             # this method returns true if the subsequence is complete, false if not
@@ -1066,7 +1068,17 @@ class RobotControl(Node):
             self.pickup_lightsaber_state_last = self.pickup_lightsaber_state
 
 
-        if self.pickup_lightsaber_state == PickupLightsaberState.REMOVE_ATTACHED_COLLISION_START:
+        if self.pickup_lightsaber_state == PickupLightsaberState.ADD_WALLS_START:
+            if self.moveit.busy_updating_obstacles:
+                self.pickup_lightsaber_state = PickupLightsaberState.ADD_WALLS_WAIT
+            else:
+                self.add_walls()
+                
+        elif self.pickup_lightsaber_state == PickupLightsaberState.ADD_WALLS_WAIT:
+            if not self.moveit.busy_updating_obstacles:
+                self.pickup_lightsaber_state = PickupLightsaberState.REMOVE_ATTACHED_COLLISION_START
+
+        elif self.pickup_lightsaber_state == PickupLightsaberState.REMOVE_ATTACHED_COLLISION_START:
             if self.moveit.busy_updating_obstacles:
                 self.pickup_lightsaber_state = PickupLightsaberState.REMOVE_ATTACHED_COLLISION_WAIT
             else:
@@ -1245,7 +1257,6 @@ class RobotControl(Node):
     def pickup_lightsaber_callback(self, request, response):
         """Begin lightsaber subsequence if currently in IDLE."""
 
-        self.add_walls()
         if self.state == State.IDLE:
             self.state = State.PICKUP_LIGHTSABER
 
