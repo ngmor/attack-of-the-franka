@@ -379,6 +379,7 @@ class RobotControl(Node):
         self.block_height = 0.23
         self.block_width = 0.11
         self.block_length = 0.08
+        self.ally_height_buffer = 1.5
         self.sign = 1
         self.dead_count_pub = self.create_publisher(Int16, 'enemy_dead_count', 10)
         self.dead_enemy_count = 0
@@ -455,7 +456,7 @@ class RobotControl(Node):
                 length = 0.078
                 width = 0.105
                 height = 0.2286                                         #EDIT: ally00.transform.translation.z - table.transform.translation.z
-                shape.dimensions = [length, width, height]
+                shape.dimensions = [length, width, height * self.ally_height_buffer]
                 obstacle.primitives = [shape]
 
                 pose = geometry_msgs.msg.Pose()
@@ -604,7 +605,7 @@ class RobotControl(Node):
                     length = 0.078
                     width = 0.105
                     height = 0.2286             #-(table.transform.translation.z - ally00.transform.translation.z)
-                    shape.dimensions = [length, width, height]
+                    shape.dimensions = [length, width, height * self.ally_height_buffer]
                     obstacle.primitives = [shape]
 
                     pose = geometry_msgs.msg.Pose()
@@ -621,6 +622,7 @@ class RobotControl(Node):
 
         elif self.state == State.FIND_ALLIES_WAIT:
             if not self.moveit.busy_updating_obstacles:
+                time.sleep(1)
                 self.state = State.LOOK_FOR_ENEMY
 
 
@@ -858,6 +860,10 @@ class RobotControl(Node):
                 joint6_range = joint6_end - joint6_start
                 joint7_range = joint7_end - joint7_start
 
+                stab_adjust_start = math.radians(0)
+                stab_adjust_end = math.radians(10)
+                stab_adjust_range = stab_adjust_end - stab_adjust_start
+
                 table_length = 0.4826
 
 
@@ -895,7 +901,7 @@ class RobotControl(Node):
                                              joint3_start + joint3_range / table_length *self.x_disp[i],                    # panda_joint3
                                              joint4_start + joint4_range / table_length *self.x_disp[i],     # panda_joint4
                                              joint5_start + joint5_range / table_length *self.x_disp[i],       # panda_joint5
-                                             joint6_start + joint6_range / table_length *self.x_disp[i] + math.radians(5),     # panda_joint6
+                                             joint6_start + joint6_range / table_length *self.x_disp[i] + stab_adjust_range / table_length *self.x_disp[i],     # panda_joint6
                                              joint7_start + joint7_range / table_length *self.x_disp[i],     # panda_joint7
                                                                     # TODO - This might open the gripper when we try to move home
                                                                     # CAREFUL!
@@ -1968,7 +1974,7 @@ class RobotControl(Node):
 
         shape = shape_msgs.msg.SolidPrimitive()
         shape.type = 3  # Cylinder
-        shape.dimensions = [self.lightsaber_full_length, self.lightsaber_diameter, 0.2]
+        shape.dimensions = [self.lightsaber_full_length, self.lightsaber_diameter * 1.25 / 2.0, 0.2]
         obstacle.primitives = [shape]
 
         obstacle.header.frame_id = self.moveit.config.base_frame_id
@@ -2001,7 +2007,7 @@ class RobotControl(Node):
 
         shape = shape_msgs.msg.SolidPrimitive()
         shape.type = 3  # Cylinder
-        shape.dimensions = [self.lightsaber_full_length*1.03, self.lightsaber_diameter, 0.2]
+        shape.dimensions = [self.lightsaber_full_length*1.03, self.lightsaber_diameter * 1.25 / 2.0, 0.2]
         attached_obstacle.object.primitives = [shape]
 
         attached_obstacle.object.operation = attached_obstacle.object.ADD
@@ -2312,7 +2318,7 @@ class RobotControl(Node):
                 # swinging so the brick falls to the left from desk view
                 self.get_logger().info(f'dist_y factor {abs(dist_y-0.5*self.block_width)}, {self.block_width*1.5}')
                 self.get_logger().info(f'dist_x factor {(dist_x-0.5*self.block_width)}, {self.block_height+self.block_width*0.5}')
-                if (abs(dist_y-0.5*self.block_width) < self.block_width*1.5) and ((dist_x-0.5*self.block_width) < (self.block_height+self.block_width*0.5)):
+                if (abs(dist_y) < self.block_width*1.25) and (abs(dist_x) < (self.block_height+self.block_width*0.5)):
                     if (dist_x>=0):
                         self.get_logger().info(f'not safe to attack in left swing')
                         return False
@@ -2321,7 +2327,7 @@ class RobotControl(Node):
                 # swinging so the brick falls to the right
                 self.get_logger().info(f'dist_y factor {abs(dist_y-0.5*self.block_width)}, {self.block_width*1.5}')
                 self.get_logger().info(f'dist_x factor {(dist_x+0.5*self.block_width)}, {-(self.block_height+self.block_width*0.5)}')
-                if (abs(dist_y-0.5*self.block_width) < self.block_width*1.5) and ((dist_x+0.5*self.block_width) > -(self.block_height+self.block_width*0.5)):
+                if (abs(dist_y) < self.block_width*1.25) and (abs(dist_x) > -(self.block_height+self.block_width*0.5)):
                     if (dist_x <= 0):
                         self.get_logger().info(f'not safe to attack in right swing')
                         return False

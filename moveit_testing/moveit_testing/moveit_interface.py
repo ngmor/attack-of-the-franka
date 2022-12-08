@@ -501,6 +501,9 @@ class MoveIt():
                 # send the goal plan through the move action client
                 self._plan_future = \
                     self._move_action_client.send_goal_async(self._assemble_plan_message(self._attached_obstacles))
+                #TODO remove
+                self._node.get_logger().info(f'Collision: {self._planning_scene.world.collision_objects}')
+                self._node.get_logger().info(f'Attached: {self._planning_scene.robot_state.attached_collision_objects}')
                 self._plan_state = _PlanState.WAIT_FOR_PLAN_ACK
         elif self._plan_state == _PlanState.WAIT_FOR_PLAN_ACK:
             # once that future object.done() returns true,
