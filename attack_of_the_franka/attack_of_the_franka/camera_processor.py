@@ -3,6 +3,7 @@ from rclpy.node import Node
 from cv_bridge import CvBridge, CvBridgeError
 import cv2
 import sensor_msgs.msg
+import std_srvs.srv
 import numpy as np
 import copy
 import std_msgs.msg
@@ -203,8 +204,11 @@ class ContourData():
         if self.coord is None:
             return False
         else:
-            return ((self.coord.x >= limits.lower) and 
-                    (self.coord.x <= limits.upper))
+            if self.coord.x == 0: # invalid depth
+                return False
+            else:
+                return ((self.coord.x >= limits.lower) and 
+                        (self.coord.x <= limits.upper))
 
     def get_frame_name(self, number):
         """Get the frame name of the object by inputting which number it is."""
@@ -244,14 +248,38 @@ class ContourData():
             # TODO add more information?
         )
 
+def get_average_transformation(transformation_array):
+    """Get average transformation from an array of transformations."""
+
+    transform = geometry_msgs.msg.TransformStamped().transform
+    transform.translation.x = np.average([val.translation.x for val in transformation_array])
+    transform.translation.y = np.average([val.translation.y for val in transformation_array])
+    transform.translation.z = np.average([val.translation.z for val in transformation_array])
+    transform.rotation.w = np.average([val.rotation.w for val in transformation_array])
+    transform.rotation.x = np.average([val.rotation.x for val in transformation_array])
+    transform.rotation.y = np.average([val.rotation.y for val in transformation_array])
+    transform.rotation.z = np.average([val.rotation.z for val in transformation_array])
+
+    return transform
 
 class CameraProcessor(Node):
     """
-    Create mask to detect enemy and ally
-    Provide a sliderbar to set HSV values
-    Create trackbar for Area thresholding
-    Providing option to sort allies and enemies in x or y
-    Create height thresholding to detect in a certain height range only
+    Performs image processing for ally and enemy detection based on color.
+    Gets workspace area transforms and the robot transform
+
+    Publisher:
+        object_detections (Detections) : publishes the detected objects
+
+    Subscribers:
+        /camera/color/image_raw (sensor_msgs.msg.Image) : gets the color image_raw data
+        /camera/color/camera_info (sensor_msgs.msg.CameraInfo) : gets meta information for the camera
+        /camera/aligned_depth_to_color/image_raw (sensor_msgs.msg.Image) : gets the aligned_depth_to_color raw image
+        enemy_dead_count (std_msgs.msg.Int16) : gets the dead enemy count
+
+    Services:
+        start_apriltag_calibration (std_srvs.srv.Empty) :   starts the AprilTag caliberations
+        update_calibration_continuously (std_srvs.srv.Empty) :  updates the AprilTag calibrations
+
     """
 
     def __init__(self):
@@ -265,19 +293,33 @@ class CameraProcessor(Node):
         self.sub_color_camera_info = self.create_subscription(sensor_msgs.msg.CameraInfo,'/camera/color/camera_info',self.color_info_callback,10)
         self.sub_aligned_depth_image = self.create_subscription(sensor_msgs.msg.Image,'/camera/aligned_depth_to_color/image_raw',self.aligned_depth_image_callback,10)
         self.sub_enemy_dead_count = self.create_subscription(std_msgs.msg.Int16,'enemy_dead_count',self.enemy_deadcount_callback,10)
+        self.srv_start_apriltag_calibration = self.create_service(std_srvs.srv.Empty, 'start_apriltag_calibration', self.start_apriltag_calibration_callback)
+        self.srv_update_calibration_continuously = self.create_service(std_srvs.srv.Empty, 'update_calibration_continuously', self.update_calibration_continuously_callback)
 
         self.declare_parameter("enable_ally_sliders", False,
                                ParameterDescriptor(description="Enable Ally HSV sliders"))
         self.enable_ally_sliders = self.get_parameter("enable_ally_sliders").get_parameter_value().bool_value
-        self.declare_parameter("enable_enemy_sliders", True,
+        self.declare_parameter("enable_enemy_sliders", False,
                                ParameterDescriptor(description="Enable Enemy HSV sliders"))
         self.enable_enemy_sliders = self.get_parameter("enable_enemy_sliders").get_parameter_value().bool_value
+        self.declare_parameter("invert_ally_hue", False,
+                               ParameterDescriptor(description="Inverts ally hue range"))
+        self.invert_ally_hue = self.get_parameter("invert_ally_hue").get_parameter_value().bool_value
+        self.declare_parameter("invert_enemy_hue", True,
+                               ParameterDescriptor(description="Inverts enemy hue range"))
+        self.invert_enemy_hue = self.get_parameter("invert_enemy_hue").get_parameter_value().bool_value
         self.declare_parameter("enable_filtering_sliders", False,
                                ParameterDescriptor(description="Enable filtering sliders"))
         self.enable_filtering_sliders = self.get_parameter("enable_filtering_sliders").get_parameter_value().bool_value
         self.declare_parameter("enable_work_area_sliders", False,
                                ParameterDescriptor(description="Enable work area bounds by sliders"))
         self.enable_work_area_sliders = self.get_parameter("enable_work_area_sliders").get_parameter_value().bool_value
+        self.declare_parameter("enable_depth_filter", True,
+                               ParameterDescriptor(description="Activate depth filter"))
+        self.enable_depth_filter = self.get_parameter("enable_depth_filter").get_parameter_value().bool_value
+        self.declare_parameter("enable_depth_filter_sliders", False,
+                               ParameterDescriptor(description="Enable depth filter sliders"))
+        self.enable_depth_filter_sliders = self.get_parameter("enable_depth_filter_sliders").get_parameter_value().bool_value
         self.declare_parameter("enable_work_area_apriltags", True,
                                ParameterDescriptor(description="Enable work area bounds by AprilTags"))
         self.enable_work_area_apriltags = self.get_parameter("enable_work_area_apriltags").get_parameter_value().bool_value
@@ -287,6 +329,9 @@ class CameraProcessor(Node):
         self.declare_parameter("sort_by_x", False,
                                ParameterDescriptor(description="sorts the allies and enemies in x"))
         self.sort_by_x = self.get_parameter("sort_by_x").get_parameter_value().bool_value
+        self.declare_parameter("update_calibration_continuously", False,
+                               ParameterDescriptor(description="Update AprilTag calibration continuously."))
+        self.update_calibration_continuously = self.get_parameter("update_calibration_continuously").get_parameter_value().bool_value
     
         # Dimension parameters
         self.declare_parameter("apriltags.robot_table_tag_size", 0.173,
@@ -304,12 +349,6 @@ class CameraProcessor(Node):
         self.declare_parameter("robot_table.x_tag_edge_to_table_edge", 0.023,
                                ParameterDescriptor(description="X edge of AprilTag to edge of robot table"))
         self.robot_table_x_tag_edge_to_table_edge = self.get_parameter("robot_table.x_tag_edge_to_table_edge").get_parameter_value().double_value
-        self.declare_parameter("depth_filter.min_offset", 0.0,
-                               ParameterDescriptor(description="Depth filter minimum offset"))
-        self.depth_filter_min = self.get_parameter("depth_filter.min_offset").get_parameter_value().double_value
-        self.declare_parameter("depth_filter.max_offset", 0.5,
-                               ParameterDescriptor(description="Depth filter maximum offset"))
-        self.depth_filter_max = self.get_parameter("depth_filter.max_offset").get_parameter_value().double_value
 
         # sliders get precedence over AprilTags
         if self.enable_work_area_sliders and self.enable_work_area_apriltags:
@@ -330,6 +369,9 @@ class CameraProcessor(Node):
         if self.enable_enemy_sliders:
             cv2.namedWindow(self.enemy_mask_window_name, cv2.WINDOW_NORMAL)
 
+        self.ally_hsv = HSVLimits('Ally',self.ally_mask_window_name,[100,57,120],[142,255,255],self.enable_ally_sliders)
+        self.enemy_hsv = HSVLimits('Enemy',self.enemy_mask_window_name,[20,81,167],[160,255,255],self.enable_enemy_sliders)
+
         self.filter_kernel = 5
         self.area_threshold = 1250
 
@@ -340,12 +382,14 @@ class CameraProcessor(Node):
         self.x_limits = TrackbarLimits('X',self.color_window_name,[558,808],[0,1280],self.enable_work_area_sliders)
         self.y_limits = TrackbarLimits('Y',self.color_window_name,[261,642],[0,720],self.enable_work_area_sliders)
 
+        self.depth_limits = TrackbarLimits('Depth', self.color_window_name, [0, 1670], [0, 3000], self.enable_depth_filter_sliders)
+
         self.contours_filtered_ally = []
         self.contours_filtered_enemy = []
 
         # self.ally_hsv = HSVLimits('Ally',self.ally_mask_window_name,[100,57,120],[142,255,255],self.enable_ally_sliders)
-        self.ally_hsv = HSVLimits('Ally',self.ally_mask_window_name,[57,169,215],[97,255,255],self.enable_ally_sliders)
-        self.enemy_hsv = HSVLimits('Enemy',self.enemy_mask_window_name,[0,50,222],[180,111,255],self.enable_enemy_sliders)
+        # self.ally_hsv = HSVLimits('Ally',self.ally_mask_window_name,[57,169,215],[97,255,255],self.enable_ally_sliders)
+        # self.enemy_hsv = HSVLimits('Enemy',self.enemy_mask_window_name,[0,50,222],[180,111,255],self.enable_enemy_sliders)
         # self.enemy_hsv = HSVLimits('Enemy',self.enemy_mask_window_name,[0,40,181],[180,82,255],self.enable_enemy_sliders)
 
         self.static_broadcaster = StaticTransformBroadcaster(self)
@@ -382,6 +426,20 @@ class CameraProcessor(Node):
         tf_table_apriltag_to_base.header.stamp = time
         self.static_broadcaster.sendTransform(tf_table_apriltag_to_base)
 
+        self.calibration_data_points = 100 # TODO make parameter?
+
+        self.calibrating_robot_table = not self.update_calibration_continuously
+        self.robot_table_calibration_array = []
+        self.tf_camera_to_robot_table_calibrated = None
+
+        self.calibrating_workspace1 = not self.update_calibration_continuously
+        self.workspace1_calibration_array = []
+        self.tf_camera_to_workspace1_calibrated = None
+
+        self.calibrating_workspace2 = not self.update_calibration_continuously
+        self.workspace2_calibration_array = []
+        self.tf_camera_to_workspace2_calibrated = None
+
         self.dead_enemies_count = 0
         
         self.get_logger().info("camera_processor node started")
@@ -400,7 +458,22 @@ class CameraProcessor(Node):
         kernel = np.ones((self.filter_kernel,self.filter_kernel),np.uint8)
 
         # Threshold HSV image to get only ally color
-        mask_ally = cv2.inRange(hsv_image,self.ally_hsv.lower.to_np_array(),self.ally_hsv.upper.to_np_array())
+        if not self.invert_ally_hue:
+            mask_ally = cv2.inRange(hsv_image,self.ally_hsv.lower.to_np_array(),self.ally_hsv.upper.to_np_array())
+        else:
+            # Split into 2 inRange calls and logically and them
+            temp_lower = self.ally_hsv.lower.to_np_array()
+            temp_upper = self.ally_hsv.upper.to_np_array()
+
+            temp_lower[0] = 0
+            temp_upper[0] = self.ally_hsv.lower.H
+
+            mask_ally = cv2.inRange(hsv_image,temp_lower,temp_upper)
+
+            temp_lower[0] = self.ally_hsv.upper.H
+            temp_upper[0] = 255
+
+            mask_ally += cv2.inRange(hsv_image,temp_lower,temp_upper)
         
         # Get contours of ally
         ret_ally, thresh_ally = cv2.threshold(mask_ally, 127, 255, 0)
@@ -432,9 +505,9 @@ class CameraProcessor(Node):
                             if not contour_data.coord_within_bounds(self.work_area_limits_y,self.work_area_limits_z):
                                 include_contour = False
 
-                            if self.depth_filter_min != self.depth_filter_max:
-                                if not contour_data.depth_within_bounds(self.work_area_limits_x):
-                                    include_contour = False
+                        if self.enable_depth_filter:
+                            if not contour_data.depth_within_bounds(self.get_depth_limits()):
+                                include_contour = False
 
                         if include_contour:
                             self.contours_filtered_ally.append(contour_data)
@@ -447,7 +520,22 @@ class CameraProcessor(Node):
 
 
         # Threshold HSV image to get only enemy color
-        mask_enemy = cv2.inRange(hsv_image,self.enemy_hsv.lower.to_np_array(),self.enemy_hsv.upper.to_np_array())
+        if not self.invert_enemy_hue:
+            mask_enemy = cv2.inRange(hsv_image,self.enemy_hsv.lower.to_np_array(),self.enemy_hsv.upper.to_np_array())
+        else:
+            # Split into 2 inRange calls and logically and them
+            temp_lower = self.enemy_hsv.lower.to_np_array()
+            temp_upper = self.enemy_hsv.upper.to_np_array()
+
+            temp_lower[0] = 0
+            temp_upper[0] = self.enemy_hsv.lower.H
+
+            mask_enemy = cv2.inRange(hsv_image,temp_lower,temp_upper)
+
+            temp_lower[0] = self.enemy_hsv.upper.H
+            temp_upper[0] = 255
+
+            mask_enemy += cv2.inRange(hsv_image,temp_lower,temp_upper)
 
         # Get contours of ally
         ret_enemy, thresh_enemy = cv2.threshold(mask_enemy, 127, 255, 0)
@@ -478,9 +566,9 @@ class CameraProcessor(Node):
                             if not contour_data.coord_within_bounds(self.work_area_limits_y,self.work_area_limits_z):
                                 include_contour = False
 
-                            if self.depth_filter_min != self.depth_filter_max:
-                                if not contour_data.depth_within_bounds(self.work_area_limits_x):
-                                    include_contour = False
+                        if self.enable_depth_filter:
+                            if not contour_data.depth_within_bounds(self.get_depth_limits()):
+                                include_contour = False
 
 
                         if include_contour:
@@ -548,7 +636,7 @@ class CameraProcessor(Node):
 
         color_image_with_tracking = cv2.putText(color_image_with_tracking, f'Allies: {len(self.contours_filtered_ally)}',(50,50),cv2.FONT_HERSHEY_DUPLEX,1,(255,0,0))
         color_image_with_tracking = cv2.putText(color_image_with_tracking, f'Enemies: {len(self.contours_filtered_enemy)}',(50,100),cv2.FONT_HERSHEY_DUPLEX,1,(0,0,255))
-        color_image_with_tracking = cv2.putText(color_image_with_tracking, f'Enemies Vanquished!: {self.dead_enemies_count}',(50,150),cv2.FONT_HERSHEY_DUPLEX,1,(128,0,0))
+        color_image_with_tracking = cv2.putText(color_image_with_tracking, f'Enemies Vanquished!: {self.dead_enemies_count}',(50,150),cv2.FONT_HERSHEY_DUPLEX,1,(0,0,128))
 
         cv2.imshow(self.color_window_name, color_image_with_tracking)
         cv2.waitKey(1)
@@ -569,16 +657,9 @@ class CameraProcessor(Node):
                 FRAMES().PANDA_TABLE_RAW,
                 rclpy.time.Time()
             )
+            robot_table_detected = True
         except Exception:
-            pass
-
-        # Broadcast last known transforms even if we lose AprilTags
-        if self.tf_camera_to_robot_table_raw is not None:
-            transform = copy.deepcopy(self.tf_camera_to_robot_table_raw)
-            transform.child_frame_id = FRAMES().PANDA_TABLE
-            transform.header.stamp = time
-
-            self.broadcaster.sendTransform(transform)
+            robot_table_detected = False
 
         # Get workspace transformations if possible
         if self.enable_work_area_apriltags:
@@ -588,8 +669,9 @@ class CameraProcessor(Node):
                     FRAMES().WORK_TABLE1_RAW,
                     rclpy.time.Time()
                 )
+                workspace1_detected = True
             except Exception:
-                pass
+                workspace1_detected = False
 
             try:
                 self.tf_camera_to_workspace2_raw = self.buffer.lookup_transform(
@@ -597,58 +679,153 @@ class CameraProcessor(Node):
                     FRAMES().WORK_TABLE2_RAW,
                     rclpy.time.Time()
                 )
+                workspace2_detected = True
             except Exception:
-                pass
+                workspace2_detected = False
 
-        self.work_area_apriltags_detected = (
-            (self.tf_camera_to_workspace1_raw is not None) 
-            and (self.tf_camera_to_workspace2_raw is not None)
-        )
+        robot_table_transform = None
+
+        # Broadcast last known transforms even if we lose AprilTags
+        if self.tf_camera_to_robot_table_raw is not None:
+
+            # If updating continuously, always send most recent available transform
+            if self.update_calibration_continuously:
+                robot_table_transform = copy.deepcopy(self.tf_camera_to_robot_table_raw)
+
+            # Otherwise, send calibrated transform
+            else:
+                # collect data if performing a calibration
+                if self.calibrating_robot_table:
+                    # If all data is collected, update the calibrated transform
+                    if len(self.robot_table_calibration_array) >= self.calibration_data_points:
+                        self.tf_camera_to_robot_table_calibrated = copy.deepcopy(self.tf_camera_to_robot_table_raw)
+
+                        # Calculate average translation
+                        self.tf_camera_to_robot_table_calibrated.transform = get_average_transformation(self.robot_table_calibration_array)
+
+                        self.get_logger().info('Robot table AprilTag calibration complete')
+
+                        self.calibrating_robot_table = False
+
+                    # Collect data
+                    elif robot_table_detected:
+                        self.robot_table_calibration_array.append(copy.deepcopy(self.tf_camera_to_robot_table_raw.transform))
+
+                # if a calibration transform has been created, send it. Otherwise send latest transform
+                if self.tf_camera_to_robot_table_calibrated is not None:
+                    robot_table_transform = copy.deepcopy(self.tf_camera_to_robot_table_calibrated)
+                else:
+                    robot_table_transform = copy.deepcopy(self.tf_camera_to_robot_table_raw)
+                        
+            robot_table_transform.child_frame_id = FRAMES().PANDA_TABLE
+            robot_table_transform.header.stamp = time
+            self.broadcaster.sendTransform(robot_table_transform)
+
+        workspace1_transform = None
 
         # Broadcast last known transforms even if we lose AprilTags
         if self.tf_camera_to_workspace1_raw is not None:
-            transform = copy.deepcopy(self.tf_camera_to_workspace1_raw)
-            transform.child_frame_id = FRAMES().WORK_TABLE1
-            transform.header.stamp = time
 
-            self.broadcaster.sendTransform(transform)
+            # If updating continuously, always send most recent available transform
+            if self.update_calibration_continuously:
+                workspace1_transform = copy.deepcopy(self.tf_camera_to_workspace1_raw)
 
+            # Otherwise, send calibrated transform
+            else:
+                # collect data if performing a calibration
+                if self.calibrating_workspace1:
+                    # If all data is collected, update the calibrated transform
+                    if len(self.workspace1_calibration_array) >= self.calibration_data_points:
+                        self.tf_camera_to_workspace1_calibrated = copy.deepcopy(self.tf_camera_to_workspace1_raw)
+
+                        # Calculate average translation
+                        self.tf_camera_to_workspace1_calibrated.transform = get_average_transformation(self.workspace1_calibration_array)
+
+                        self.get_logger().info('Workspace 1 AprilTag calibration complete')
+
+                        self.calibrating_workspace1 = False
+
+                    # Collect data
+                    elif workspace1_detected:
+                        self.workspace1_calibration_array.append(copy.deepcopy(self.tf_camera_to_workspace1_raw.transform))
+
+                # if a calibration transform has been created, send it. Otherwise send latest transform
+                if self.tf_camera_to_workspace1_calibrated is not None:
+                    workspace1_transform = copy.deepcopy(self.tf_camera_to_workspace1_calibrated)
+                else:
+                    workspace1_transform = copy.deepcopy(self.tf_camera_to_workspace1_raw)
+                        
+            workspace1_transform.child_frame_id = FRAMES().WORK_TABLE1
+            workspace1_transform.header.stamp = time
+            self.broadcaster.sendTransform(workspace1_transform)
+
+        workspace2_transform = None
+
+        # Broadcast last known transforms even if we lose AprilTags
         if self.tf_camera_to_workspace2_raw is not None:
-            transform = copy.deepcopy(self.tf_camera_to_workspace2_raw)
-            transform.child_frame_id = FRAMES().WORK_TABLE2
-            transform.header.stamp = time
 
-            self.broadcaster.sendTransform(transform)
+            # If updating continuously, always send most recent available transform
+            if self.update_calibration_continuously:
+                workspace2_transform = copy.deepcopy(self.tf_camera_to_workspace2_raw)
 
+            # Otherwise, send calibrated transform
+            else:
+                # collect data if performing a calibration
+                if self.calibrating_workspace2:
+                    # If all data is collected, update the calibrated transform
+                    if len(self.workspace2_calibration_array) >= self.calibration_data_points:
+                        self.tf_camera_to_workspace2_calibrated = copy.deepcopy(self.tf_camera_to_workspace2_raw)
+
+                        # Calculate average translation
+                        self.tf_camera_to_workspace2_calibrated.transform = get_average_transformation(self.workspace2_calibration_array)
+
+                        self.get_logger().info('Workspace 2 AprilTag calibration complete')
+
+                        self.calibrating_workspace2 = False
+
+                    # Collect data
+                    elif workspace2_detected:
+                        self.workspace2_calibration_array.append(copy.deepcopy(self.tf_camera_to_workspace2_raw.transform))
+
+                # if a calibration transform has been created, send it. Otherwise send latest transform
+                if self.tf_camera_to_workspace2_calibrated is not None:
+                    workspace2_transform = copy.deepcopy(self.tf_camera_to_workspace2_calibrated)
+                else:
+                    workspace2_transform = copy.deepcopy(self.tf_camera_to_workspace2_raw)
+                        
+            workspace2_transform.child_frame_id = FRAMES().WORK_TABLE2
+            workspace2_transform.header.stamp = time
+            self.broadcaster.sendTransform(workspace2_transform)
+
+        self.work_area_apriltags_detected = (
+            (workspace1_transform is not None) 
+            and (workspace2_transform is not None)
+        )
         
         if self.work_area_apriltags_detected:
             # Determine bounds from work area AprilTags
             self.work_area_limits_y.lower = min(
-                self.tf_camera_to_workspace1_raw.transform.translation.y,
-                self.tf_camera_to_workspace2_raw.transform.translation.y
+                workspace1_transform.transform.translation.y,
+                workspace2_transform.transform.translation.y
             ) - self.work_area_tag_size / 2.
             self.work_area_limits_y.upper = max(
-                self.tf_camera_to_workspace1_raw.transform.translation.y,
-                self.tf_camera_to_workspace2_raw.transform.translation.y
+                workspace1_transform.transform.translation.y,
+                workspace2_transform.transform.translation.y
             ) + self.work_area_tag_size / 2.
             self.work_area_limits_z.lower = min(
-                self.tf_camera_to_workspace1_raw.transform.translation.z,
-                self.tf_camera_to_workspace2_raw.transform.translation.z
+                workspace1_transform.transform.translation.z,
+                workspace2_transform.transform.translation.z
             ) - self.work_area_tag_size / 2.
             self.work_area_limits_z.upper = max(
-                self.tf_camera_to_workspace1_raw.transform.translation.z,
-                self.tf_camera_to_workspace2_raw.transform.translation.z
+                workspace1_transform.transform.translation.z,
+                workspace2_transform.transform.translation.z
             ) + self.work_area_tag_size / 2.
             table_depth = min(
-                self.tf_camera_to_workspace1_raw.transform.translation.x,
-                self.tf_camera_to_workspace2_raw.transform.translation.x
+                workspace1_transform.transform.translation.x,
+                workspace2_transform.transform.translation.x
             )
-            # Inverted minus sign and min/max due to direction of camera frame x axis
-            self.work_area_limits_x.lower = table_depth - self.depth_filter_max
-            self.work_area_limits_x.upper = table_depth - self.depth_filter_min
 
             # Get pixel coordinates to draw on picture
-            # TODO - turn into actual transforms and publish?
             self.tf_workspace_min = TransformStamped()
             self.tf_workspace_min.transform.translation.x = table_depth
             self.tf_workspace_min.transform.translation.y = self.work_area_limits_y.lower
@@ -707,6 +884,36 @@ class CameraProcessor(Node):
             return
     def enemy_deadcount_callback(self, msg):
         self.dead_enemies_count = msg.data
+
+    def start_apriltag_calibration_callback(self, request, response):
+
+        self.calibrating_robot_table = True
+        self.robot_table_calibration_array = []
+
+        self.calibrating_workspace1 = True
+        self.workspace1_calibration_array = []
+
+        self.calibrating_workspace2 = True
+        self.workspace2_calibration_array = []
+
+        self.update_calibration_continuously = False
+
+        return response
+
+    def update_calibration_continuously_callback(self, request, response):
+
+        self.update_calibration_continuously = True
+
+        return response
+
+    def get_depth_limits(self):
+
+        # Convert from mm to m
+        limits = Limits()
+        limits.lower = self.depth_limits.value.lower / 1000.
+        limits.upper = self.depth_limits.value.upper / 1000.
+
+        return limits
 
 
 def entry(args=None):

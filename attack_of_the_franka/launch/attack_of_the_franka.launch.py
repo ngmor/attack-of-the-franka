@@ -32,29 +32,18 @@ def generate_launch_description():
         IncludeLaunchDescription(
             PythonLaunchDescriptionSource(
                 PathJoinSubstitution([
-                    FindPackageShare('franka_moveit_config'),
-                    'launch',
-                    'moveit.launch.py'
+                    FindPackageShare('attack_of_the_franka'),
+                    'robot.launch.py'
                 ])
             ),
-            launch_arguments=[('robot_ip', 'dont-care'), ('use_fake_hardware', 'true')],
-            condition=IfCondition(LaunchConfiguration('simulation')),
+            launch_arguments=[('simulation', LaunchConfiguration('simulation'))]
         ),
         IncludeLaunchDescription(
             PythonLaunchDescriptionSource(
                 PathJoinSubstitution([
-                    FindPackageShare('franka_moveit_config'),
-                    'launch',
-                    'rviz.launch.py'
+                    FindPackageShare('attack_of_the_franka'),
+                    'realsense.launch.py'
                 ])
             ),
-            launch_arguments=[('robot_ip', 'panda0.robot')],
-            condition=UnlessCondition(LaunchConfiguration('simulation')),
-        ),
-        Node(
-            package='attack_of_the_franka',
-            executable='robot_control',
-            parameters=[PathJoinSubstitution(
-            [FindPackageShare('attack_of_the_franka'), 'parameters.yaml'])],
         ),
     ])
