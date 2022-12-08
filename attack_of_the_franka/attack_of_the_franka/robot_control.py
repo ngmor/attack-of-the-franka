@@ -630,6 +630,8 @@ class RobotControl(Node):
             self.left_goal_waypoint = geometry_msgs.msg.Pose()
             self.right_goal_waypoint = geometry_msgs.msg.Pose()
             self.right_knock_enemy_waypoint = geometry_msgs.msg.Pose()
+            if len(self.detected_enemies) == 0:
+                self.state = State.CHECK_FOR_ENEMY_REMAINING
             if not self.moveit.busy:
                 if all_transforms_found:
                     self.enemies_before = len(self.detected_enemies)
@@ -1173,7 +1175,6 @@ class RobotControl(Node):
                # time.sleep(2)
                 self.get_logger().info(f'num movements: {self.num_movements}')
                 self.get_logger().info(f'num moves completed: {self.num_moves_completed}')
-                self.get_logger().info(f'FUCK!!!!')
                 if self.num_moves_completed < self.num_movements:
                     if self.moveit.get_last_error() == MoveItApiErrors.NO_ERROR and self.sign == 1:
                         self.get_logger().info("next waypoint!")
@@ -1420,6 +1421,7 @@ class RobotControl(Node):
         # no longer necessary since we're using the API home function
         self.goal_pose = copy.deepcopy(self.home_pose)
 
+        self.looking_for_enemies = False
         self.state = State.MOVE_TO_HOME_START
         self.get_logger().info("WHAT")
 
@@ -1963,7 +1965,7 @@ class RobotControl(Node):
 
         shape = shape_msgs.msg.SolidPrimitive()
         shape.type = 3  # Cylinder
-        shape.dimensions = [self.lightsaber_full_length*1.05, self.lightsaber_diameter, 0.2]
+        shape.dimensions = [self.lightsaber_full_length*1.03, self.lightsaber_diameter, 0.2]
         attached_obstacle.object.primitives = [shape]
 
         attached_obstacle.object.operation = attached_obstacle.object.ADD
