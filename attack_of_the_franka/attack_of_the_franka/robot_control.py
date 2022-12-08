@@ -371,6 +371,8 @@ class RobotControl(Node):
         self.detected_objects = None
         self.detected_allies = []
         self.detected_enemies = []
+        self.unreachable_enemies = []
+        self.current_enemy = None
 
         self.num_movements = 0
         self.num_moves_completed = 0
@@ -380,7 +382,7 @@ class RobotControl(Node):
         self.block_width = 0.11
         self.block_length = 0.08
         self.ally_height_buffer = 1.5
-        self.sign = 1
+        self.movement_direction_sign = 1
         self.dead_count_pub = self.create_publisher(Int16, 'enemy_dead_count', 10)
         self.dead_enemy_count = 0
         self.enemies_after = 0
@@ -501,7 +503,10 @@ class RobotControl(Node):
             self.state_last = self.state
 
         # State machine
-        if self.state == State.MOVE_TO_HOME_START:
+        if self.state == State.IDLE:
+            self.unreachable_enemies = []
+
+        elif self.state == State.MOVE_TO_HOME_START:
 
             if self.moveit.planning:
                 self.state = State.MOVE_TO_HOME_WAIT
@@ -518,7 +523,7 @@ class RobotControl(Node):
                     #     self.state = State.MOVE_TO_HOME_START
                # else:
                 self.get_logger().info("dang it")
-                if self.sign == -1 and not self.is_stab_motion:
+                if self.movement_direction_sign == -1 and not self.is_stab_motion:
                     self.state = State.RIGHT_DYNAMIC_MOTION
                 elif self.is_stab_motion and self.num_moves_completed != self.num_movements:
                     self.state = State.STAB_MOTION
@@ -648,7 +653,26 @@ class RobotControl(Node):
                     # self.get_logger().info(f'length: {len(self.detected_enemies)}')
                     # for i in range(len(self.detected_enemies)):
                     if len(self.detected_enemies) > 0:
-                        i = 0
+
+                        for i in range(len(self.detected_enemies)):
+                            # select first enemy not in unreachable enemies list
+                            enemy_reachable = True
+                            for enemy in self.unreachable_enemies:
+                                if enemy.obj.name == self.detected_enemies[i].obj.name:
+                                    enemy_reachable = False
+                                    break
+
+                            if enemy_reachable:
+                                break
+                        
+                        # prevent array bounds error
+                        if not enemy_reachable:
+                            self.state = State.CHECK_FOR_ENEMY_REMAINING
+                            return
+
+                        self.current_enemy = self.detected_enemies[i]
+
+
                         # self.get_logger().info(f'in detected enemies array: {self.detected_enemies[i].tf.transform.translation.x}')
                         self.x_disp.append(self.detected_enemies[i].tf.transform.translation.x - self.table1_x + 0.1)     #add buffer offset
                         self.rotate.append(math.atan2(self.detected_enemies[i].tf.transform.translation.y, self.detected_enemies[i].tf.transform.translation.x))
@@ -723,15 +747,17 @@ class RobotControl(Node):
                             self.state = State.LEFT_DYNAMIC_MOTION
                         elif self.check_ally_danger_fall(self.detected_enemies[i], 1):
                             self.state = State.RIGHT_DYNAMIC_MOTION
-                            self.sign = -1
+                            self.movement_direction_sign = -1
                         elif self.check_ally_danger_fall(self.detected_enemies[i], 2):
                             self.state = State.STAB_MOTION
-                            self.sign = -1
+                            self.movement_direction_sign = -1
                             self.is_stab_motion = True
                         else:
                             self.get_logger().error("ALLY IN DANGER, CAN'T ATTACK ENEMY")
-                            # instead of idle, go to next enemy
-                            self.state = State.IDLE
+                            self.unreachable_enemies.append(copy.deepcopy(self.current_enemy))
+                            self.state = State.CHECK_FOR_ENEMY_REMAINING
+                    else:
+                        self.state = State.CHECK_FOR_ENEMY_REMAINING
 
 
         elif self.state == State.LEFT_DYNAMIC_MOTION:
@@ -763,7 +789,7 @@ class RobotControl(Node):
                         pass
         
         elif self.state == State.RIGHT_DYNAMIC_MOTION:
-            self.sign = -1
+            self.movement_direction_sign = -1
             # self.get_logger().info(f'Moveit State: {self.moveit._state}')
             self.get_logger().info(f'Moveit State: {self.moveit._plan_state}')
             self.get_logger().info("Right Dyanmic Motion")
@@ -1066,14 +1092,14 @@ class RobotControl(Node):
                 if self.moveit.get_last_error() == MoveItApiErrors.NO_ERROR:
                     self.state = State.EXECUTE_START
                     self.get_logger().info("start execute!")
-                elif self.sign == 1 and self.num_moves_completed == 0:
-                    self.sign = -1
+                elif self.movement_direction_sign == 1 and self.num_moves_completed == 0:
+                    self.movement_direction_sign = -1
                     self.num_moves_completed = 0
                     self.num_waypoints_completed = 0
                     self.state = State.RIGHT_DYNAMIC_MOTION
                     self.get_logger().info("other dynamic motion!")
-                elif self.sign == 1:
-                    self.sign = -1
+                elif self.movement_direction_sign == 1:
+                    self.movement_direction_sign = -1
                     self.num_moves_completed = 0
                     self.num_waypoints_completed = 0
                     self.state = State.MOVE_TO_HOME_START
@@ -1093,14 +1119,16 @@ class RobotControl(Node):
                     self.get_logger().info("back to home!")
                 else:
                     self.get_logger().info("no solution!")
-                    self.state = State.IDLE
+                    # Enemy is unreachable
+                    self.unreachable_enemies.append(self.current_enemy)
+                    self.state = State.MOVE_TO_HOME_START
 
         elif self.state == State.CHECK_FOR_ENEMY_REMAINING:
             
             # Update objects, wait for all transforms to be found
             if self.update_detected_objects(ObjectType.ENEMY):
-                enemies_left = len(self.detected_enemies)
-                if enemies_left > 0:
+                enemies_left = len(self.detected_enemies) > len(self.unreachable_enemies)
+                if enemies_left:
                     self.get_logger().info("Attacking next enemy")
                     self.state = State.RESET_ALLIES
                 else:
@@ -1218,7 +1246,7 @@ class RobotControl(Node):
                 self.get_logger().info(f'num movements: {self.num_movements}')
                 self.get_logger().info(f'num moves completed: {self.num_moves_completed}')
                 if self.num_moves_completed < self.num_movements:
-                    if self.moveit.get_last_error() == MoveItApiErrors.NO_ERROR and self.sign == 1:
+                    if self.moveit.get_last_error() == MoveItApiErrors.NO_ERROR and self.movement_direction_sign == 1:
                         self.get_logger().info("next waypoint!")
                         self.state = State.LEFT_DYNAMIC_MOTION
                     elif not self.is_stab_motion:
@@ -1229,7 +1257,7 @@ class RobotControl(Node):
                     self.get_logger().info("done!")
                     all_transforms_found = self.update_detected_objects(ObjectType.ENEMY)
                     self.is_stab_motion = False
-                    self.sign = 1
+                    self.movement_direction_sign = 1
                     if all_transforms_found:
                         self.enemies_after = len(self.detected_enemies)
                         self.state = State.MOVE_TO_HOME_START
