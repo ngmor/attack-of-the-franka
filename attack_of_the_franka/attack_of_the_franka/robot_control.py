@@ -644,13 +644,14 @@ class RobotControl(Node):
                         x_pos = self.detected_enemies[i].tf.transform.translation.x
                         y_pos = self.detected_enemies[i].tf.transform.translation.y
                         if self.detected_enemies[i].tf.transform.translation.z < 0.1:
-                            height = 3*self.block_height/5
+                            height = 3*self.block_height/4
+                            waypoint_height_correction = 0.16
                         else:
-                            height = self.detected_enemies[i].tf.transform.translation.z - self.table1_z
+                            height = self.detected_enemies[i].tf.transform.translation.z
+                            waypoint_height_correction = 0.2
                         self.get_logger().info(f'height: {self.detected_enemies[i].tf.transform.translation.z}')
                         self.get_logger().info(f'table1 z: {self.table1_z}')
 
-                        waypoint_height_correction = 0.18
                         waypoint_angle = -math.radians(9.)
 
                         #left waypoint
@@ -877,9 +878,108 @@ class RobotControl(Node):
                                             0.0   
                                             ]
 
+                    # joint1_start = math.radians(-24)
+                    # joint2_start = math.radians(-23)
+                    # joint3_start = math.radians(48)
+                    # joint4_start = math.radians(-151)
+                    # joint5_start = math.radians(24)
+                    # joint6_start = math.radians(135)
+                    # joint7_start = math.radians(59)
+
+                    # joint1_end = math.radians(-40)
+                    # joint2_end = math.radians(10)
+                    # joint3_end = math.radians(54)
+                    # joint4_end = math.radians(-126)
+                    # joint5_end = math.radians(-11)
+                    # joint6_end = math.radians(133)
+                    # joint7_end = math.radians(76)
+
+                    # joint1_start = math.radians(-8)
+                    # joint2_start = math.radians(-58)
+                    # joint3_start = math.radians(72)
+                    # joint4_start = math.radians(-162)
+                    # joint5_start = math.radians(64)
+                    # joint6_start = math.radians(115)
+                    # joint7_start = math.radians(68)
+
+                    # joint1_end = math.radians(-134)
+                    # joint2_end = math.radians(-63)
+                    # joint3_end = math.radians(120)
+                    # joint4_end = math.radians(-67)
+                    # joint5_end = math.radians(54)
+                    # joint6_end = math.radians(104)
+                    # joint7_end = math.radians(48)
+
+                    # joint1_range = joint1_end - joint1_start
+                    # joint2_range = joint2_end - joint2_start
+                    # joint3_range = joint3_end - joint3_start
+                    # joint4_range = joint4_end - joint4_start
+                    # joint5_range = joint5_end - joint5_start
+                    # joint6_range = joint6_end - joint6_start
+                    # joint7_range = joint7_end - joint7_start
+
+                    # table_length = 0.4826
+
+
+                    # self.waypoint_joints1 = [joint1_start + self.rotate[i],        #ONLY CHANGE THIS ONE(rotate panda_joint1)
+                    #                         -0.7853981633974483,    # panda_joint2
+                    #                         0.0,                    # panda_joint3
+                    #                         -2.356194490192345,     # panda_joint4
+                    #                         0.0,                    # panda_joint5
+                    #                         (math.pi*5)/6,     # panda_joint6
+                    #                         0.7853981633974483,     # panda_joint7
+                    #                                                 # TODO - This might open the gripper when we try to move home
+                    #                                                 # CAREFUL!
+                    #                         0.0,                  # 0.035, 0.0 panda_finger_joint1
+                    #                         0.0   
+                    #                         ]
+
+                    # self.waypoint_joints2 = [joint1_start + self.rotate[i],        #ONLY CHANGE THIS ONE(rotate panda_joint1)
+                    #                          joint2_start,    # panda_joint2
+                    #                          joint3_start,                  # panda_joint3
+                    #                          joint4_start,     # panda_joint4
+                    #                          joint5_start,                  # panda_joint5
+                    #                          joint6_start,   # panda_joint6
+                    #                          joint7_start,   # panda_joint7
+                    #                                                 # TODO - This might open the gripper when we try to move home
+                    #                                                 # CAREFUL!
+                    #                         0.0,                  # 0.035, 0.0 panda_finger_joint1
+                    #                         0.0   
+                    #                         ]
+
+
+                    # self.waypoint_joints3 = [joint1_start + self.rotate[i] + ((joint1_range/table_length)*self.x_disp[i]),        #ONLY CHANGE THIS ONE(rotate panda_joint1)
+                    #                          joint2_start + ((joint2_range/table_length)*self.x_disp[i]),    # panda_joint2     0.4826 meters is width of block table and 107 deg is the total degrees this joint changes to reach end of table
+                    #                          joint3_start + ((joint3_range/table_length)*self.x_disp[i]),                    # panda_joint3
+                    #                          joint4_start + ((joint4_range/table_length)*self.x_disp[i]),     # panda_joint4
+                    #                          joint5_start + ((joint5_range/table_length)*self.x_disp[i]),       # panda_joint5
+                    #                          joint6_start + ((joint6_range/table_length)*self.x_disp[i]),     # panda_joint6
+                    #                          joint7_start + ((joint7_range/table_length)*self.x_disp[i]) ,     # panda_joint7
+                    #                                                 # TODO - This might open the gripper when we try to move home
+                    #                                                 # CAREFUL!
+                    #                         0.0,                  # 0.035, 0.0 panda_finger_joint1
+                    #                         0.0   
+                    #                         ]
+
+                    # self.waypoint_joints4 = [joint1_start + self.rotate[i],        #ONLY CHANGE THIS ONE(rotate panda_joint1)
+                    #                          joint2_start,    # panda_joint2
+                    #                          joint3_start,                  # panda_joint3
+                    #                          joint4_start,      # panda_joint4
+                    #                          joint5_start,                  # panda_joint5
+                    #                          joint6_start,   # panda_joint6
+                    #                          joint7_start,   # panda_joint7
+                    #                                                 # TODO - This might open the gripper when we try to move home
+                    #                                                 # CAREFUL!
+                    #                         0.0,                  # 0.035, 0.0 panda_finger_joint1
+                    #                         0.0   
+                    #                         ]
+
                     joint_movements = [self.waypoint_joints1, self.waypoint_joints2, self.waypoint_joints3, self.waypoint_joints4]
                     self.num_movements = len(joint_movements)
                     joint_waypoints.append(joint_movements)
+
+                    self.get_logger().error(f"waypoint 2: {self.waypoint_joints2}")
+                    self.get_logger().error(f"waypoint 3: {self.waypoint_joints3}")
 
                 self.moveit.joint_waypoints(joint_waypoints[self.num_waypoints_completed][self.num_moves_completed])
                 self.num_moves_completed += 1
