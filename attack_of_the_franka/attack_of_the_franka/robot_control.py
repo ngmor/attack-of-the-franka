@@ -489,7 +489,7 @@ class RobotControl(Node):
         # self.find_allies()
 
         if self.allies_reset_flag:
-            if self.update_detected_objects(ObjectType.ALLY):
+            if self.find_allies():
                 self.allies_reset_flag = False
 
         new_state = self.state != self.state_last
