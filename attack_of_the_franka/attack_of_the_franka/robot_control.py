@@ -510,6 +510,7 @@ class RobotControl(Node):
         if self.state == State.IDLE:
             self.unreachable_enemies = []
             self.looking_for_enemies = 0
+            self.is_stab_motion = False
 
         elif self.state == State.MOVE_TO_HOME_START:
 
@@ -530,8 +531,8 @@ class RobotControl(Node):
                 self.get_logger().info("dang it")
                 if self.movement_direction_sign == -1 and not self.is_stab_motion:
                     self.state = State.RIGHT_DYNAMIC_MOTION
-                # elif self.is_stab_motion and self.num_moves_completed != self.num_movements:
-                #     self.state = State.STAB_MOTION
+                elif self.is_stab_motion and self.num_moves_completed != self.num_movements:
+                    self.state = State.STAB_MOTION
                 else:
                     if self.looking_for_enemies:
                         self.state = State.CHECK_FOR_ENEMY_REMAINING
@@ -697,7 +698,7 @@ class RobotControl(Node):
 
                         #left waypoint
                         self.left_goal_waypoint.position.x = x_pos - (self.lightsaber_full_length*0.75)
-                        self.left_goal_waypoint.position.y = y_pos + 0.16            #adding slight offset (slightly more than half the block width)
+                        self.left_goal_waypoint.position.y = y_pos + 0.12            #adding slight offset (slightly more than half the block width)
                         self.left_goal_waypoint.position.z = -self.table_offset + height + waypoint_height_correction
                         self.get_logger().info(f'goal z: {self.goal_waypoint.position.z}')
                         self.left_goal_waypoint.orientation.x = math.pi
@@ -712,14 +713,14 @@ class RobotControl(Node):
 
                         self.left_reverse_enemy_waypoint = geometry_msgs.msg.Pose()
                         self.left_reverse_enemy_waypoint.position.x = x_pos - (self.lightsaber_full_length*0.75)
-                        self.left_reverse_enemy_waypoint.position.y = y_pos + 0.16           #adding slight offset (slightly more than half the block width)
+                        self.left_reverse_enemy_waypoint.position.y = y_pos + 0.12           #adding slight offset (slightly more than half the block width)
                         self.left_reverse_enemy_waypoint.position.z = -self.table_offset + height + waypoint_height_correction
                         self.left_reverse_enemy_waypoint.orientation.x = math.pi
                         self.left_reverse_enemy_waypoint.orientation.z = waypoint_angle
 
                         #right waypoint
                         self.right_goal_waypoint.position.x = x_pos - (self.lightsaber_full_length*0.75)
-                        self.right_goal_waypoint.position.y = y_pos - 0.16            #adding slight offset (slightly more than half the block width)
+                        self.right_goal_waypoint.position.y = y_pos - 0.12            #adding slight offset (slightly more than half the block width)
                         self.right_goal_waypoint.position.z = -self.table_offset + height + waypoint_height_correction
                         self.get_logger().info(f'goal z: {self.right_goal_waypoint.position.z}')
                         self.right_goal_waypoint.orientation.x = math.pi
@@ -734,7 +735,7 @@ class RobotControl(Node):
 
                         self.right_reverse_enemy_waypoint = geometry_msgs.msg.Pose()
                         self.right_reverse_enemy_waypoint.position.x = x_pos - (self.lightsaber_full_length*0.75)
-                        self.right_reverse_enemy_waypoint.position.y = y_pos - 0.16           #adding slight offset (slightly more than half the block width)
+                        self.right_reverse_enemy_waypoint.position.y = y_pos - 0.12           #adding slight offset (slightly more than half the block width)
                         self.right_reverse_enemy_waypoint.position.z = -self.table_offset + height + waypoint_height_correction
                         self.right_reverse_enemy_waypoint.orientation.x = math.pi
                         self.right_reverse_enemy_waypoint.orientation.z = waypoint_angle
@@ -892,7 +893,7 @@ class RobotControl(Node):
                 joint7_range = joint7_end - joint7_start
 
                 stab_adjust_start = math.radians(0)
-                stab_adjust_end = math.radians(10)
+                stab_adjust_end = math.radians(8)
                 stab_adjust_range = stab_adjust_end - stab_adjust_start
 
                 table_length = 0.4826
