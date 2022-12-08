@@ -380,6 +380,8 @@ class RobotControl(Node):
 
         self.num_waypoints_completed = 0
 
+        self.add_walls()
+
         self.get_logger().info("robot_control node started")
 
 
@@ -1243,6 +1245,7 @@ class RobotControl(Node):
     def pickup_lightsaber_callback(self, request, response):
         """Begin lightsaber subsequence if currently in IDLE."""
 
+        self.add_walls()
         if self.state == State.IDLE:
             self.state = State.PICKUP_LIGHTSABER
 
