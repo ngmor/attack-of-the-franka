@@ -833,9 +833,37 @@ class RobotControl(Node):
                 # Come in from center
                 #####################################
                 #goal waypoint
+
+                joint1_start = math.radians(0)
+                joint2_start = math.radians(-31)
+                joint3_start = math.radians(-1)
+                joint4_start = math.radians(-156)
+                joint5_start = math.radians(0)
+                joint6_start = math.radians(122)
+                joint7_start = math.radians(45)
+
+                joint1_end = math.radians(0)
+                joint2_end = math.radians(49)
+                joint3_end = math.radians(-1)
+                joint4_end = math.radians(-76)
+                joint5_end = math.radians(0)
+                joint6_end = math.radians(116)
+                joint7_end = math.radians(45)
+
+                joint1_range = joint1_end - joint1_start
+                joint2_range = joint2_end - joint2_start
+                joint3_range = joint3_end - joint3_start
+                joint4_range = joint4_end - joint4_start
+                joint5_range = joint5_end - joint5_start
+                joint6_range = joint6_end - joint6_start
+                joint7_range = joint7_end - joint7_start
+
+                table_length = 0.4826
+
+
                 self.is_waypoint = False
                 for i in range(len(self.x_disp)):
-                    self.waypoint_joints1 = [self.rotate[i],        #ONLY CHANGE THIS ONE(rotate panda_joint1)
+                    self.waypoint_joints1 = [joint1_start + self.rotate[i],        #ONLY CHANGE THIS ONE(rotate panda_joint1)
                                             -0.7853981633974483,    # panda_joint2
                                             0.0,                    # panda_joint3
                                             -2.356194490192345,     # panda_joint4
@@ -848,13 +876,13 @@ class RobotControl(Node):
                                             0.0   
                                             ]
 
-                    self.waypoint_joints2 = [self.rotate[i],        #ONLY CHANGE THIS ONE(rotate panda_joint1)
-                                            math.radians(-31),    # panda_joint2
-                                            math.radians(-1),                    # panda_joint3
-                                            math.radians(-156),     # panda_joint4
-                                            math.radians(0),                    # panda_joint5
-                                            math.radians(125),     # panda_joint6
-                                            math.radians(45),     # panda_joint7
+                    self.waypoint_joints2 = [joint1_start + self.rotate[i],        #ONLY CHANGE THIS ONE(rotate panda_joint1)
+                                             joint2_start,    # panda_joint2
+                                             joint3_start,                   # panda_joint3
+                                             joint4_start,      # panda_joint4
+                                             joint5_start,                  # panda_joint5
+                                             joint6_start,     # panda_joint6
+                                             joint7_start,    # panda_joint7
                                                                     # TODO - This might open the gripper when we try to move home
                                                                     # CAREFUL!
                                             0.0,                  # 0.035, 0.0 panda_finger_joint1
@@ -862,26 +890,26 @@ class RobotControl(Node):
                                             ]
 
 
-                    self.waypoint_joints3 = [self.rotate[i],        #ONLY CHANGE THIS ONE(rotate panda_joint1)
-                                            math.radians(-31 + ((80/0.4826)*self.x_disp[i])),    # panda_joint2     0.4826 meters is width of block table and 107 deg is the total degrees this joint changes to reach end of table
-                                            math.radians(-1),                    # panda_joint3
-                                            math.radians(-156 + ((80/0.4826)*self.x_disp[i])),     # panda_joint4
-                                            math.radians(0),       # panda_joint5
-                                            math.radians(130 - ((6/0.4826)*self.x_disp[i])),     # panda_joint6
-                                            math.radians(45),     # panda_joint7
+                    self.waypoint_joints3 = [joint1_start + joint1_range / table_length *self.x_disp[i] + self.rotate[i],        #ONLY CHANGE THIS ONE(rotate panda_joint1)
+                                             joint2_start + joint2_range / table_length *self.x_disp[i],    # panda_joint2     0.4826 meters is width of block table and 107 deg is the total degrees this joint changes to reach end of table
+                                             joint3_start + joint3_range / table_length *self.x_disp[i],                    # panda_joint3
+                                             joint4_start + joint4_range / table_length *self.x_disp[i],     # panda_joint4
+                                             joint5_start + joint5_range / table_length *self.x_disp[i],       # panda_joint5
+                                             joint6_start + joint6_range / table_length *self.x_disp[i] + math.radians(5),     # panda_joint6
+                                             joint7_start + joint7_range / table_length *self.x_disp[i],     # panda_joint7
                                                                     # TODO - This might open the gripper when we try to move home
                                                                     # CAREFUL!
                                             0.0,                  # 0.035, 0.0 panda_finger_joint1
                                             0.0   
                                             ]
 
-                    self.waypoint_joints4 = [self.rotate[i],        #ONLY CHANGE THIS ONE(rotate panda_joint1)
-                                            math.radians(-31),    # panda_joint2
-                                            math.radians(-1),                    # panda_joint3
-                                            math.radians(-156),     # panda_joint4
-                                            math.radians(0),                    # panda_joint5
-                                            math.radians(125),     # panda_joint6
-                                            math.radians(45),     # panda_joint7
+                    self.waypoint_joints4 = [joint1_start + self.rotate[i],        #ONLY CHANGE THIS ONE(rotate panda_joint1)
+                                             joint2_start,    # panda_joint2
+                                             joint3_start,                    # panda_joint3
+                                             joint4_start,     # panda_joint4
+                                             joint5_start,                    # panda_joint5
+                                             joint6_start,     # panda_joint6
+                                             joint7_start,     # panda_joint7
                                                                     # TODO - This might open the gripper when we try to move home
                                                                     # CAREFUL!
                                             0.0,                  # 0.035, 0.0 panda_finger_joint1
@@ -2141,7 +2169,7 @@ class RobotControl(Node):
         pose5 = geometry_msgs.msg.Pose()
         pose5.position.x = 0.0
         pose5.position.y = 0.0
-        pose5.position.z = self.ceiling_height
+        pose5.position.z = self.ceiling_height - self.robot_table_height
         obstacle5.primitive_poses = [pose5]
 
         shape5 = shape_msgs.msg.SolidPrimitive()
@@ -2302,8 +2330,8 @@ class RobotControl(Node):
                 # swinging so the brick falls straight backwards
                 self.get_logger().info(f'dist_y factor {(dist_y-0.5*self.block_width)}, {(self.block_height+self.block_width*0.5)}')
                 self.get_logger().info(f'dist_x factor {(abs(dist_x)-0.5*self.block_width)}, {self.block_width}')
-                if (((abs(dist_x)-0.5*self.block_width) < self.block_width)
-                        and ((dist_y+0.5*self.block_width) < (self.block_height+self.block_width*0.5))
+                if (((abs(dist_x)) < self.block_width)
+                        and ((dist_y+self.block_width) < (self.block_height+self.block_width*0.5))
                         and (dist_y <= 0)):
                     self.get_logger().info(f'not safe to attack in stabbing style')
                     return False
