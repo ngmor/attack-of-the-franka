@@ -193,6 +193,9 @@ class RobotControl(Node):
         self.look_for_enemy_srv = self.create_service(std_srvs.srv.Empty,
                                                     'look_for_enemy',
                                                     self.look_for_enemy_callback)
+        self.reset_allies = self.create_service(std_srvs.srv.Empty,
+                                                    'reset_allies',
+                                                    self.reset_allies_callback)
 
          # create a listener for brick position
         self.tf_buffer = Buffer()
@@ -389,6 +392,7 @@ class RobotControl(Node):
 
         self.get_logger().info("robot_control node started")
 
+        self.allies_reset_flag = False
 
     def obstacle_info(self):
         """
@@ -483,6 +487,10 @@ class RobotControl(Node):
         self.moveit.handle()
 
         # self.find_allies()
+
+        if self.allies_reset_flag:
+            if self.update_detected_objects(ObjectType.ALLY):
+                self.allies_reset_flag = False
 
         new_state = self.state != self.state_last
 
@@ -2187,6 +2195,9 @@ class RobotControl(Node):
         self.moveit.update_attached_obstacles([attached_obstacle], delete=False)
 
 
+    def reset_allies_callback(self, request, response):
+        self.allies_reset_flag = True
+        return response
 
     def add_walls_callback(self, request, response):
 
