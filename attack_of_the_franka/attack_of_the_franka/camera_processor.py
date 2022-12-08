@@ -1,3 +1,17 @@
+# Copyright 2022 Attack of the Franka.
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+
 import rclpy
 from rclpy.node import Node
 from cv_bridge import CvBridge, CvBridgeError
@@ -81,8 +95,10 @@ class TrackbarLimits():
         self.limits.upper = limits[1]
 
         if use_trackbar:
-            cv2.createTrackbar(self.name.lower, self.window_name, self.value.lower,self.limits.upper,self.trackbar_lower)
-            cv2.createTrackbar(self.name.upper, self.window_name, self.value.upper,self.limits.upper,self.trackbar_upper)
+            cv2.createTrackbar(self.name.lower, self.window_name, self.value.lower,
+                self.limits.upper, self.trackbar_lower)
+            cv2.createTrackbar(self.name.upper, self.window_name, self.value.upper,
+                self.limits.upper, self.trackbar_upper)
 
     def trackbar_lower(self, val):
         """Adjust lower limit when trackbar is moved."""
@@ -112,12 +128,18 @@ class HSVLimits():
         self.upper_names = HSV(self.name + ' H hi', self.name + ' S hi', self.name + ' V hi')
 
         if use_trackbar:
-            cv2.createTrackbar(self.lower_names.H, self.window_name,self.lower.H,180,self.trackbar_lower_H)
-            cv2.createTrackbar(self.upper_names.H, self.window_name,self.upper.H,180,self.trackbar_upper_H)
-            cv2.createTrackbar(self.lower_names.S, self.window_name,self.lower.S,255,self.trackbar_lower_S)
-            cv2.createTrackbar(self.upper_names.S, self.window_name,self.upper.S,255,self.trackbar_upper_S)
-            cv2.createTrackbar(self.lower_names.V, self.window_name,self.lower.V,255,self.trackbar_lower_V)
-            cv2.createTrackbar(self.upper_names.V, self.window_name,self.upper.V,255,self.trackbar_upper_V)
+            cv2.createTrackbar(self.lower_names.H, self.window_name, self.lower.H, 180, 
+                self.trackbar_lower_H)
+            cv2.createTrackbar(self.upper_names.H, self.window_name, self.upper.H, 180,
+                self.trackbar_upper_H)
+            cv2.createTrackbar(self.lower_names.S, self.window_name, self.lower.S, 255,
+                self.trackbar_lower_S)
+            cv2.createTrackbar(self.upper_names.S, self.window_name, self.upper.S, 255,
+                self.trackbar_upper_S)
+            cv2.createTrackbar(self.lower_names.V, self.window_name, self.lower.V, 255,
+                self.trackbar_lower_V)
+            cv2.createTrackbar(self.upper_names.V, self.window_name, self.upper.V, 255,
+                self.trackbar_upper_V)
 
     def trackbar_lower_H(self,val):
         """Set the H lower bound when the trackbar is moved."""
@@ -483,7 +505,7 @@ class CameraProcessor(Node):
         self.get_logger().info("camera_processor node started")
     
     def timer_callback(self):
-        
+        """Execute cyclic camera processing."""
         self.get_transforms()
 
         # Can't execute if there isn't a color image yet
@@ -701,7 +723,6 @@ class CameraProcessor(Node):
                 thickness=1
             )
 
-
         color_image_with_tracking = cv2.putText(
             color_image_with_tracking,
             f'Allies: {len(self.contours_filtered_ally)}',
@@ -732,10 +753,13 @@ class CameraProcessor(Node):
     
     def get_transforms(self):
         """
-        Get transforms  between camera and panda table and broadcast them
+        Obtain necessary transformations.
+
+        Get transforms  between camera and panda table and broadcast them.
         Get transforms between camera and workspace diagonal ends and broadcast them. 
         Calculate the workspace from the transforms and make a bounding box depicting it.
-        Fix frames to latest transform in case we stop receiving transforms from AprilTags
+        Fix frames to latest transform in case we stop receiving transforms from AprilTags.
+        Calibrate AprilTag locations over multiple received transformations.
         """
         time = self.get_clock().now().to_msg()
 
@@ -944,12 +968,15 @@ class CameraProcessor(Node):
 
 
     def trackbar_filter_kernel(self,val):
+        """Adjust filter kernel value when trackbar is moved through OpenCV."""
         self.filter_kernel = val
+
     def trackbar_area_threshold(self,val):
+        """Adjust area threshold value when trackbar is moved through OpenCV."""
         self.area_threshold = val
 
     def color_image_callback(self, data):
-        """Use cvbridge to use color_image from intel realsense in ros2"""
+        """Use cvbridge to get color_image data from Intel RealSense in ROS2."""
         try:
             self.color_image = self.bridge.imgmsg_to_cv2(data,desired_encoding='bgr8')
         except CvBridgeError as e:
@@ -957,7 +984,7 @@ class CameraProcessor(Node):
             return
 
     def aligned_depth_image_callback(self,data):
-        """Use cvbridge to use aligned_depth_image from intel realsense in ros2"""
+        """Use cvbridge to get aligned_depth_image data from Intel RealSense in ROS2."""
         try:
             self.aligned_depth_image = self.bridge.imgmsg_to_cv2(data)
         except CvBridgeError as e:
@@ -965,7 +992,7 @@ class CameraProcessor(Node):
             return
 
     def color_info_callback(self,info):
-        """Get image depth information into ros2"""
+        """Collect camera information published by the ROS2 RealSense nodes."""
         # https://github.com/IntelRealSense/realsense-ros/blob/ros2-development/realsense2_camera/scripts/show_center_depth.py
         try:
             if self.intrinsics:
@@ -985,11 +1012,13 @@ class CameraProcessor(Node):
         except CvBridgeError as e:
             print(e)
             return
+
     def enemy_deadcount_callback(self, msg):
+        """Get published dead enemy count."""
         self.dead_enemies_count = msg.data
 
     def start_apriltag_calibration_callback(self, request, response):
-
+        """Start AprilTag calibration when the start_apriltag_calibration service is called."""
         self.calibrating_robot_table = True
         self.robot_table_calibration_array = []
 
@@ -1004,14 +1033,13 @@ class CameraProcessor(Node):
         return response
 
     def update_calibration_continuously_callback(self, request, response):
-
+        """Switch to updating AprilTag positions continuously."""
         self.update_calibration_continuously = True
 
         return response
 
     def get_depth_limits(self):
-
-        # Convert from mm to m
+        """Convert stored depth limits from mm to m."""
         limits = Limits()
         limits.lower = self.depth_limits.value.lower / 1000.
         limits.upper = self.depth_limits.value.upper / 1000.
