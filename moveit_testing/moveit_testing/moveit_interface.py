@@ -14,6 +14,7 @@
 
 """
 MoveIt Python API.
+
 Description: This API is used to interact with MoveIt to add obstacles to the environment,
              plan a trajectory avoiding any present obstacles, and execute the trajectory that was
              planned. Functions are available for users to input goal poses for the end-effector
@@ -68,19 +69,18 @@ import moveit_msgs.action
 import moveit_msgs.srv
 import sensor_msgs.msg
 import std_msgs.msg
-import shape_msgs.msg
 import rclpy
 from tf2_ros.buffer import Buffer
 from tf2_ros.transform_listener import TransformListener
-import numpy as np
 
-# TODO - change to use SMACH?
+
 class _State(Enum):
     """Top level states for main state machine."""
 
     IDLE = auto(),
     PLANNING = auto(),
     EXECUTING = auto(),
+
 
 class _PlanState(Enum):
     """Planning states, part of main state machine."""
@@ -137,15 +137,15 @@ class MoveConfig():
     allowed_planning_time = 5.0
     max_velocity_scaling_factor = 0.1
     max_acceleration_scaling_factor = 0.1
-    tolerance = 0.001 #0.1
-    home_joint_positions = []  # Must be in the same order as in the joint state message
-                               # TODO - improve? also input joint names?
+    tolerance = 0.001
+    home_joint_positions = []
     cycle_count = 2
 
 
 class MoveIt():
     """
     MoveIt Python API.
+
     Contains the necessary variables and functions to take in parameters
     such as end effector position/orientation and plan and/or execute that trajectory.
     Users are also able to place objects in the planning scene.
@@ -182,7 +182,8 @@ class MoveIt():
             moveit_msgs.srv.GetPlanningScene, 'get_planning_scene')
         self.sub_joint_states = self._node.create_subscription(
             sensor_msgs.msg.JointState, '/joint_states', self._sub_joint_state_callback, 10)
-        self.pub_planning_scene = self._node.create_publisher(moveit_msgs.msg.PlanningScene, '/planning_scene', 10)
+        self.pub_planning_scene = self._node.create_publisher(moveit_msgs.msg.PlanningScene,
+                                                              '/planning_scene', 10)
 
         # TODO - other initialization that needs to happen
         self._plan_future = Future()
@@ -227,48 +228,16 @@ class MoveIt():
 
         self.completed = False
 
-        self.joint_past = [0,0,0,0,0,0,0,0,0,0]
+        self.joint_past = [0, 0, 0, 0, 0, 0, 0, 0, 0, 0]
 
         self.iterations = 0
-        
         self._delete_via_string = False
         self._string_to_delete = ""
-
-        # # ----------------- Sample Collision Object -------------------- #
-        # obstacle_pose1 = geometry_msgs.msg.Pose()
-        # obstacle_shape1 = shape_msgs.msg.SolidPrimitive()
-        # self.sample_attached_collision = moveit_msgs.msg.AttachedCollisionObject()
-        # self.sample_attached_collision.link_name = 'panda_hand_tcp'
-        # self.sample_attached_collision.object.id = 'saber'
-
-        # obstacle_pose1.position.x = 0.1
-        # obstacle_pose1.position.y = 0.1
-        # obstacle_pose1.position.z = 0.3
-        # obstacle_pose1.orientation.y = -1.0
-        # obstacle_pose1.orientation.w = 1.0
-        # self.sample_attached_collision.object.primitive_poses = [obstacle_pose1]
-        
-        # obstacle_shape1.type = 3
-        # obstacle_shape1.dimensions = [0.6, 0.05, 0.2]
-        # self.sample_attached_collision.object.primitives = [obstacle_shape1]
-        # self.sample_attached_collision.object.header.frame_id = 'panda_hand_tcp'
-        # self.sample_attached_collision.object.header.stamp = self._node.get_clock().now().to_msg()
-        # self.sample_attached_collision.object.operation = self.sample_attached_collision.object.ADD
-        # # has a detach pose element that is important for end-effector grasping
-        # # has weight element to specify for lightsaber down the line
-        # attached_object = moveit_msgs.msg.PlanningScene()
-        # attached_object.name = 'sample'
-        # attached_object.robot_model_name = self.config.base_frame_id
-        # #attached_object.robot_state.attached_collision_objects = [self.sample_attached_collision]
-        # attached_object.robot_state.attached_collision_objects.append(self.sample_attached_collision)
-        # #attached_object.world.collision_objects.append(self.sample_attached_collision.object)
-        # self._obstacle_pub.publish(attached_object)
-        # self._node.get_logger().info("published")
-        # # -------------------------------------------------------------- #
 
     def handle(self):
         """
         External function to cyclically handle MoveIt interactions.
+
         This must be called in a timer callback.
         Moves between IDLE, PLANNING, EXECUTING, and OBSTACLE states to keep track of which
         related MoveIt Interation is being affected
@@ -293,14 +262,14 @@ class MoveIt():
             self._plan_state = _PlanState.IDLE
             self._move_to_home = False
             self._waypoint = False
-        
+
         if self._state != _State.EXECUTING:
             self._exec_state = _ExecState.IDLE
 
         # Set externally accessible status variables
-        self.busy = not (self._state == _State.IDLE 
-                    and self._plan_state == _PlanState.IDLE 
-                    and self._exec_state == _ExecState.IDLE)
+        self.busy = not (self._state == _State.IDLE
+                         and self._plan_state == _PlanState.IDLE
+                         and self._exec_state == _ExecState.IDLE)
         self.planning = self._state == _State.PLANNING
         self.executing = self._state == _State.EXECUTING
         self.planning_and_executing = (self.planning or self.executing) and self._plan_and_execute
@@ -340,16 +309,17 @@ class MoveIt():
 
         self._obs_sequence()
 
-        
-
     def _get_transform(self):
         """
         Get robot transformation from base frame to end-effector frame.
+
         Args:
             none
+
         Returns
         -------
             no returns
+
         """
         try:
             self._base_endeffector = self._tf_buffer.lookup_transform(
@@ -362,43 +332,43 @@ class MoveIt():
     def _sub_joint_state_callback(self, msg):
         """
         To get joint states of the robot.
+
         Callback function for /joint_states (sensor_msgs/msg/JointState) topic
+
         Args:
             msg: the data from the topic /joint_states
+
         Returns
         -------
             no returns
+
         """
         self._joint_states = msg
-      #  self._node.get_logger().info(f'start: {self._joint_states}')
 
     def _obs_sequence(self):
         """
         Publish obstacles into the planning scene by running through Obstacle state machine.
+
         Publishes:
             planning_scene (moveit_msgs/msg/PlanningScene): publish obstacles
+
         Args:
             none
+
         Returns
         -------
             no returns
+
         """
         new_state = self._obs_state != self._obs_state_last
 
         if new_state:
-            # TODO - change to debug level
-           # self._node.get_logger().info(
-            #    f"MoveIt object sequence changed to {self._obs_state.name}")
             self._node.get_logger().info(
                 f"MoveIt obstacle sequence changed to {self._obs_state.name}")
             self._obs_state_last = self._obs_state
-            
 
         if self._obs_state == _ObstacleState.IDLE:
             pass
-
-            # test = moveit_msgs.srv.ApplyPlanningScene(diff_scene)
-            # test1 = 
 
         elif self._obs_state == _ObstacleState.WAIT_FOR_READY:
             if new_state:
@@ -420,14 +390,18 @@ class MoveIt():
     def _plan_sequence(self):
         """
         Run plan subsequence.
+
         Called by the handle function while in the planning state. Checks completion
         of async functions to move between plan states and saves the plan output into
         internal variable, self._plan
+
         Args:
             none
+
         Returns
         -------
             no returns
+
         """
         new_plan_state = self._plan_state != self._plan_state_last
 
@@ -500,7 +474,8 @@ class MoveIt():
             if self._move_action_client.server_is_ready():
                 # send the goal plan through the move action client
                 self._plan_future = \
-                    self._move_action_client.send_goal_async(self._assemble_plan_message(self._attached_obstacles))
+                    self._move_action_client.send_goal_async(
+                        self._assemble_plan_message(self._attached_obstacles))
                 self._plan_state = _PlanState.WAIT_FOR_PLAN_ACK
         elif self._plan_state == _PlanState.WAIT_FOR_PLAN_ACK:
             # once that future object.done() returns true,
@@ -531,14 +506,18 @@ class MoveIt():
     def _exec_sequence(self):
         """
         Run execute subsequence.
+
         Called by the handle function while in the execute state. Checks competion
         of async functions to move between execute states and saves the plan output into
         internal variable, self.movement_result
+
         Args:
             none
+
         Returns
         -------
             no returns
+
         """
         new_exec_state = self._exec_state != self._exec_state_last
 
@@ -581,43 +560,21 @@ class MoveIt():
                     self._error = MoveItApiErrors.NO_ERROR
                     self._exec_state = _ExecState.POST_EXECUTION_DELAY
 
-                # self._node.get_logger().info(f'past positions: {self.joint_past}')
-                # if self.iterations % 10:
-                #     for i in range(len(self._joint_states.position)):
-                #         if (self._joint_states.position[i] < self.joint_past[i] + 0.01) and (self._joint_states.position[i] > self.joint_past[i] - 0.01):
-                #             self.completed = True
-                #         else:
-                #             self.completed = False
-                #     self.iterations += 1
-                #     self.joint_past = self._joint_states.position
-                # else:
-                #     self.iterations += 1
-                #     #     # return back to IDLE state to get ready for next target
-
-                # self._node.get_logger().info(f'completed? {self.completed}')
-                # if self.completed:
-                #     self._node.get_logger().info(f'joint points: {self.joint_past}')
-                #     self._node.get_logger().info(f'joint poses: {self._joint_states.position}')
-                #     self._node.get_logger().error('changing to idle')
-                #     self._state = _State.IDLE
-                #     self.completed = False
-
         elif self._exec_state == _ExecState.POST_EXECUTION_DELAY:
-                if new_exec_state:
-                    self.count = 0
-                if self.count < MoveConfig.cycle_count:
-                    self.count += 1
-                else:
-                    self._state = _State.IDLE
-
-                # return back to IDLE state to get ready for next target
-                # self._state = _State.IDLE
+            if new_exec_state:
+                self.count = 0
+            if self.count < MoveConfig.cycle_count:
+                self.count += 1
+            else:
+                self._state = _State.IDLE
 
     def _plan_traj(self, goal_pose, start_pose=None, execute=False):
         """
         Start the trajectory planning process.
+
         Internal function is called by externally accessible functions where the user can
         specify position and or orientation of the end effector.
+
         Args:
             goal_pose:  a geometry Pose and/or Orientation variable that specifies where
             start_pose: (optional) if none is specified, then use the current configuration
@@ -625,10 +582,12 @@ class MoveIt():
                         Pose with x, y, z
             execute:    (optional) defaults to false, indicating that it will only plan, not plan
                         and execute
+
         Returns
         -------
             self._error: an error code indicating success or specified failure of
                          type enum ERROR_CODES
+
         """
         # makes sure that we are IDLE before planning a task
         if self._state != _State.IDLE:
@@ -655,6 +614,7 @@ class MoveIt():
     def plan_traj_to_pose(self, goal_pose, start_pose=None, execute=False):
         """
         Plan a trajectory with the full input pose.
+
         Args:
             goal_pose:  a geometry Pose and/or Orientation variable that specifies where
             start_pose: (optional) if none is specified, then use the current configuration
@@ -662,9 +622,11 @@ class MoveIt():
                         Pose with x, y, z
             execute:    (optional) defaults to false, indicating that it will only plan, not plan
                         and execute
+
         Returns
         -------
             error of type enum ERROR_CODES provided from _plan_traj function
+
         """
         # TODO any further logic to set the input goal pose for _plan_traj function
         return self._plan_traj(goal_pose=goal_pose, start_pose=start_pose, execute=execute)
@@ -672,6 +634,7 @@ class MoveIt():
     def plan_traj_to_position(self, goal_position, start_pose=None, execute=False):
         """
         Plan a trajectory with only an input position specified.
+
         Args:
             goal_pose:  a geometry Pose and/or Orientation variable that specifies where
             start_pose: (optional) if none is specified, then use the current configuration
@@ -679,9 +642,11 @@ class MoveIt():
                         Pose with x, y, z
             execute:    (optional) defaults to false, indicating that it will only plan, not plan
                         and execute
+
         Returns
         -------
             error of type enum ERROR_CODES provided from _plan_traj function
+
         """
         goal_pose = geometry_msgs.msg.Pose()
         goal_pose.position = copy.deepcopy(goal_position)
@@ -698,6 +663,7 @@ class MoveIt():
     def plan_traj_to_orientation(self, goal_orientation, start_pose=None, execute=False):
         """
         Plan a trajectory with only an input orientation specified.
+
         Args:
             goal_pose:  a geometry Pose and/or Orientation variable that specifies where
             start_pose: (optional) if none is specified, then use the current configuration
@@ -705,9 +671,11 @@ class MoveIt():
                         Pose with x, y, z
             execute:    (optional) defaults to false, indicating that it will only plan, not plan
                         and execute
+
         Returns
         -------
             error of type enum ERROR_CODES provided from _plan_traj function
+
         """
         goal_pose = geometry_msgs.msg.Pose()
         # goal_pose.orientation = goal_orientation
@@ -727,12 +695,15 @@ class MoveIt():
     def exec_traj(self, plan=None):
         """
         Execute a trajectory.
+
         Args:
             plan: If the plan argument is passed in, use that plan. Otherwise use
                   the internally saved plan.
+
         Returns
         -------
             none
+
         """
         if self._state != _State.IDLE:
             # TODO - return some form of error, we are busy
@@ -753,10 +724,16 @@ class MoveIt():
 
     def move_to_home(self):
         """
-        Plan and execute a move to the home position
-        TODO - finish docstring
-        """
+        Plan and execute a move to the home position.
 
+        Args:
+            none
+
+        Returns
+        -------
+            variable of type Enum MoveItApiErrors indicating error state
+
+        """
         # makes sure that we are IDLE before planning a task
         if self._state != _State.IDLE:
             # return some form of error, we are busy with another task
@@ -789,30 +766,37 @@ class MoveIt():
     def get_plan(self):
         """
         Return the currently stored plan.
+
         We can use this if we want to calculate multiple plans at one time and then
         execute them without having to plan in between each one. The higher level
         node would store the plans somewhere and then pass them back into our execute
         trajectory method.
+
         Args:
             none
+
         Returns
         -------
             self._plan - the current plan saved from the plan state machine
+
         """
         return self._plan
 
     def _ik_request(self, start_joint_states, goal_pose):
         """
         Request the inverse kinematics from the compute_ik service.
+
         Args:
         ----
             start_joint_states: the start position of the robots provided by the joint
                                 state subscriber or the user if specified
             goal_pose:          user provided goal pose from the externally accessible
                                 planning function class
+
         Returns
         -------
             none
+
         """
         # Build IK message
         ik_message = moveit_msgs.msg.PositionIKRequest()
@@ -834,12 +818,15 @@ class MoveIt():
     def _assemble_plan_message(self, attached_collision_objects):
         """
         Generate plan request message from start position to goal pose.
+
         Args:
             none
+
         Returns
         -------
             assemble_msg: a moveit_msgs.action.MoveGroup.Goal() that can be asyncronously
                           called in the planning state machine to generate a plan
+
         """
         assemble_msg = moveit_msgs.action.MoveGroup.Goal()
 
@@ -851,31 +838,20 @@ class MoveIt():
         assemble_msg.request.workspace_parameters.min_corner = self.config.workspace_min_corner
         assemble_msg.request.workspace_parameters.max_corner = self.config.workspace_max_corner
         assemble_msg.request.start_state.joint_state = self._start_joint_states
-       # assemble_msg.request.start_state.attached_collision_objects = attached_collision_objects
-       # assemble_msg.planning_options.planning_scene_diff.
-       # assemble_msg.planning_options.planning_scene_diff.robot_state.attached_collision_objects = attached_collision_objects
-        
-        if len(attached_collision_objects) >= 1:
-            #acm = moveit_msgs.msg.AllowedCollisionMatrix()
-            assemble_msg.request.start_state.is_diff = True
-            # assemble_msg.planning_options.planning_scene_diff.allowed_collision_matrix.entry_values.append(('panda_rightfinger', 'gripping', True))
-            # assemble_msg.planning_options.planning_scene_diff.allowed_collision_matrix.entry_values.append(('panda_leftfinger', 'gripping', True))
-            # assemble_msg.planning_options.planning_scene_diff.allowed_collision_matrix.entry_values.append(('panda_hand_tcp', 'gripping', True))
-            # assemble_msg.planning_options.planning_scene_diff.allowed_collision_matrix.entry_values.append(('panda_hand', 'gripping', True))
 
-            collision_obj = moveit_msgs.msg.CollisionObject()
-            collision_obj = attached_collision_objects[0].object
+        robot_state_attach_obs = moveit_msgs.msg.RobotState()
+
+        if len(attached_collision_objects) >= 1:
+            assemble_msg.request.start_state.is_diff = True
 
             attached_obj = moveit_msgs.msg.AttachedCollisionObject()
             attached_obj = attached_collision_objects[0]
-            assemble_msg.planning_options.planning_scene_diff.robot_state.attached_collision_objects.append(attached_obj)
+
+            robot_state_attach_obs.attached_collision_objects.append(attached_obj)
+
+            assemble_msg.planning_options.planning_scene_diff.robot_state = robot_state_attach_obs
 
             planning_scene = moveit_msgs.msg.PlanningScene()
-            #planning_scene.world.collision_objects.append(collision_obj)
-            # planning_scene.allowed_collision_matrix.entry_values.append(('panda_rightfinger', 'gripping', True))
-            # planning_scene.allowed_collision_matrix.entry_values.append(('panda_leftfinger', 'gripping', True))
-            # planning_scene.allowed_collision_matrix.entry_values.append(('panda_hand_tcp', 'gripping', True))
-            # planning_scene.allowed_collision_matrix.entry_values.append(('panda_hand', 'gripping', True))
             planning_scene.robot_state.attached_collision_objects.append(attached_obj)
             planning_scene.is_diff = True
 
@@ -894,22 +870,21 @@ class MoveIt():
         assemble_msg.request.max_acceleration_scaling_factor = \
             self.config.max_acceleration_scaling_factor
 
-        # obstacle avoidance
-        # assemble_msg.planning_options.planning_scene_diff.world.collision_objects = \
-        #     self.obstacles.world.collision_objects
-
         assemble_msg.planning_options.plan_only = not self._plan_and_execute
         return assemble_msg
 
     def _assemble_exec_message(self):
         """
         Generate execute request message from saved plan trajectory.
+
         Args:
             none
+
         Returns
         -------
             assemble_msg - variable of type moveit_msgs.action.ExecuteTrajectory.Goal() that
                 is populated with the planned trajectory created in the plan state machine
+
         """
         assemble_msg = moveit_msgs.action.ExecuteTrajectory.Goal()
         assemble_msg.trajectory = self._plan.planned_trajectory
@@ -920,21 +895,24 @@ class MoveIt():
     def _update_collision_object(self):
         """
         Add, update, or delete obstacles (internal).
+
         Args:
             none
+
         Returns
         -------
             none
+
         """
         if self._attached_obstacles:
             # add to planning scene's attached collision object list
             self._planning_scene.robot_state.attached_collision_objects = self._attached_obstacles
 
         if self._delete_via_string:
-            #extra step to delete any allies in planning scene that were removed from the world
+            # extra step to delete any allies in planning scene that were removed from the world
             obstacle_copy = copy.deepcopy(self._planning_scene.world.collision_objects)
             self._planning_scene.world.collision_objects = []
-            #re-add objects to planning scene that do not contain the string name
+            # re-add objects to planning scene that do not contain the string name
             for item in obstacle_copy:
                 if self._string_to_delete not in item.id:
                     self._planning_scene.world.collision_objects.append(copy.deepcopy(item))
@@ -952,10 +930,10 @@ class MoveIt():
                     index = -1
 
                 if index == -1:
-                    # object isn't in list, do whatever you need  to
+                    # object isn't in list, do whatever you need to
                     # ADD
                     self._planning_scene.world.collision_objects.append(copy.deepcopy(obstacle))
-                    
+
                 else:
                     # object is in list
                     # UPDATE
@@ -972,14 +950,16 @@ class MoveIt():
     def update_obstacles(self, obstacle_list, delete=False):
         """
         Add, modify, or delete obstacles in the planning scene.
+
         Args:
             obstacle_list: list of obstacles, each of type moveit_msgs.msg.CollisionObject()
             delete:        a boolean variable to specify whether to delete the obstacles
+
         Returns
         -------
             none
-        """
 
+        """
         if self._obs_state != _ObstacleState.IDLE:
             # TODO - return some form of error, we are busy
             return
@@ -993,14 +973,16 @@ class MoveIt():
     def reset_obstacles(self, string):
         """
         Add, modify, or delete obstacles in the planning scene.
+
         Args:
             obstacle_list: list of obstacles, each of type moveit_msgs.msg.CollisionObject()
-            delete:        a boolean variable to specify whether to delete the obstacles
+            delete: a boolean variable to specify whether to delete the obstacles
+
         Returns
         -------
             none
-        """
 
+        """
         if self._obs_state != _ObstacleState.IDLE:
             # TODO - return some form of error, we are busy
             return
@@ -1013,13 +995,16 @@ class MoveIt():
 
     def update_attached_obstacles(self, attached_obstacle_list, delete=False):
         """
-        Add an attached obstacle 
+        Add an attached obstacle.
+
         Args:
             attached_obstacle_list: object of type moveit_msgs.msg.AttachedCollisionObject()
                                     to add to the Planning Scene
+
         Returns
         -------
             none
+
         """
         if delete:
             for attached_obstacle in attached_obstacle_list:
@@ -1030,23 +1015,40 @@ class MoveIt():
         else:
             # add object list to attached obstacle list
             self._attached_obstacles.extend(attached_obstacle_list)
-            
+
         self.update_obstacles([], False)
         return
 
     def get_last_error(self):
         """
         Return the last error recorded by the API.
+
         If last action was successful, this will be NO_ERROR
+
         Args:
             none
+
         Returns
         -------
             variable of type Enum MoveItApiErrors indicating error state
+
         """
         return self._error
 
     def joint_waypoints(self, waypoint):
+        """
+        Plan a position based on joint positions.
+
+        If last action was successful, this will be NO_ERROR
+
+        Args:
+            waypoint: the joint positions for each of 7 joints
+
+        Returns
+        -------
+            variable of type Enum MoveItApiErrors indicating error state
+
+        """
         if self._state != _State.IDLE:
             # return some form of error, we are busy with another task
             self._error = MoveItApiErrors.NOT_IN_IDLE_STATE
@@ -1067,7 +1069,7 @@ class MoveIt():
 
         # Skip IK
         # TODO - may want a more general way of doing this if we want to skip IK for other reasons?
-        #self._move_to_home = True
+        # self._move_to_home = True
         self._waypoint = True
 
         self._state = _State.PLANNING
@@ -1077,34 +1079,20 @@ class MoveIt():
         return self._error
 
 
-    def check_planning_scene(self, goal_waypoint):
-        
-        # self.obstacle_future = self.obstacle_client.call_async(
-        #             moveit_msgs.srv.GetPlanningScene.Request())
-        # if self.obstacle_future.done():
-        #     self._planning_scene = copy.deepcopy(self.obstacle_future.result().scene)
-        #     if self._attached_obstacles:
-        #         self._node.get_logger().info(
-        #         f"Attached obstacles message {self._planning_scene.robot_state}")
-        #         self._node.get_logger().info(
-        #         f"Length of attached obstacles message {len(self._planning_scene.robot_state.attached_collision_objects)}")
-                # self._node.get_logger().info(
-                # f"First element of attached obstacles message {self._planning_scene.robot_state.attached_collision_objects[0]}")
-                # self._node.get_logger().info(
-                # f"Second element of attached obstacles message {self._planning_scene.robot_state.attached_collision_objects[1]}")
-        return
-
 def _joint_states_to_goal_constraints(joint_state, tolerance):
     """
     Generate goal constrains given the IK joint states.
+
     Args:
         joint_state: the joint states given from the results of the inverse kinematics
                     computations
         tolerance:   provided by the configuration input from the user
+
     Returns
     -------
         goal_constraint: of type moveit_msgs.msg.Constraints to be used in the
                         _assemble_plan_message function's goal contraint parameter
+
     """
     joint_constraints = []
     for i in range(len(joint_state.name)):
@@ -1115,15 +1103,13 @@ def _joint_states_to_goal_constraints(joint_state, tolerance):
         else:
             joint_constraint.joint_name = joint_state.name[i]
             joint_constraint.position = joint_state.position[i]
-        
-        # TODO - rework this into an array of tolerances and weights
+
         joint_constraint.tolerance_above = tolerance
         joint_constraint.tolerance_below = tolerance
         joint_constraint.weight = 1.0
 
         joint_constraints.append(joint_constraint)
 
-    
     goal_constraint = [moveit_msgs.msg.Constraints(joint_constraints=joint_constraints)]
 
     return goal_constraint
