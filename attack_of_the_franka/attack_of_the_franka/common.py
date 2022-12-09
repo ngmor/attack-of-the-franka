@@ -17,6 +17,7 @@
 import geometry_msgs.msg
 from math import sqrt, sin, cos
 from enum import Enum, auto
+import numpy as np
 
 
 class FRAMES():
@@ -64,3 +65,17 @@ def angle_axis_to_quaternion(theta, axis):
                                         y=normalized[1]*sinTheta2,
                                         z=normalized[2]*sinTheta2,
                                         w=cos(theta/2.0))
+
+
+def get_average_transformation(transformation_array):
+    """Get average transformation from an array of transformations."""
+    transform = geometry_msgs.msg.TransformStamped().transform
+    transform.translation.x = np.average([val.translation.x for val in transformation_array])
+    transform.translation.y = np.average([val.translation.y for val in transformation_array])
+    transform.translation.z = np.average([val.translation.z for val in transformation_array])
+    transform.rotation.w = np.average([val.rotation.w for val in transformation_array])
+    transform.rotation.x = np.average([val.rotation.x for val in transformation_array])
+    transform.rotation.y = np.average([val.rotation.y for val in transformation_array])
+    transform.rotation.z = np.average([val.rotation.z for val in transformation_array])
+
+    return transform

@@ -58,7 +58,8 @@ from tf2_ros import TransformBroadcaster
 from geometry_msgs.msg import TransformStamped
 from tf2_ros.buffer import Buffer
 from tf2_ros.transform_listener import TransformListener
-from attack_of_the_franka.common import FRAMES, angle_axis_to_quaternion, ObjectType
+from attack_of_the_franka.common import FRAMES, angle_axis_to_quaternion,\
+    ObjectType, get_average_transformation
 from attack_of_the_franka_interfaces.msg import DetectedObject, Detections
 
 camera_scale_factor = 1.0 / 1000.0
@@ -316,20 +317,6 @@ class ContourData():
             name=self.get_frame_name(number)
             # TODO add more information?
         )
-
-
-def get_average_transformation(transformation_array):
-    """Get average transformation from an array of transformations."""
-    transform = geometry_msgs.msg.TransformStamped().transform
-    transform.translation.x = np.average([val.translation.x for val in transformation_array])
-    transform.translation.y = np.average([val.translation.y for val in transformation_array])
-    transform.translation.z = np.average([val.translation.z for val in transformation_array])
-    transform.rotation.w = np.average([val.rotation.w for val in transformation_array])
-    transform.rotation.x = np.average([val.rotation.x for val in transformation_array])
-    transform.rotation.y = np.average([val.rotation.y for val in transformation_array])
-    transform.rotation.z = np.average([val.rotation.z for val in transformation_array])
-
-    return transform
 
 
 class CameraProcessor(Node):
