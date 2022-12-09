@@ -1,5 +1,8 @@
 # Attack of the Frankas Package
 
+## Description of Package
+Contains the nodes and launchfiles necessary to run the vision and motion nodes to recognize blocks of different colors and generate paths to hit blocks of a certain color.
+
 ### Quickstart Guide of Useful Commands:
 #### Running Full Workflow:
 `ros2 launch attack_of_the_franka attack_of_the_franka.launch.py`
