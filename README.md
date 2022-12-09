@@ -22,17 +22,6 @@ https://drive.google.com/file/d/1_kVLCrcbNZSKzEiMgiprXgzdQIEo_umJ/view?usp=shari
 ### Brief Description of Project:
 Our project is to have a robot use a lightsaber to help the Rebellion fight the Empire, where the setup of the workspace is configured by a human. The robot holds the lightsaber in its grippers to knock over members of the Imperial Army, represented by red blocks placed upright on a table near the Franka. Franakin Skywalker will need to avoid blocks representing members of the Rebellion, marked by upright blue blocks, using computer vision to differentiate the blocks.
 
-### Setup Instructions:
-To clone all necessary repositories, clone this repository into the `src` directory in your workspace root. Then from the workspace root directory, run the command:
-
-`vcs import . < src/attack-of-the-franka/project.repos`
-
-(This assumes you don't change the name of the repository, update the path accordingly if you do.)
-
-If you don't have `vcstool` installed, install it with:
-
-`sudo apt install python3-vcstool`
-
 ### Summary of Project Capabilities (Goals Achieved): 
  - Robot recognizes which block it must knock over, picks up its lightsaber, and knocks over the “enemy” blocks without colliding into its “ally” blocks on the attack swing
  - The robot can pick up the lightsaber from a fixture on the side of the table
@@ -45,6 +34,22 @@ Upon launching the attack of the franka launch file, the camera and robot nodes 
 
 ### A discussion of the overall system architecture and high level concepts:
 
+### Any other information, as appropriate (lessons learned, future work):
+#### Lessons Learned:
+
+#### Future Work:
+Future work we would like to incorporate would be to have more robust movements that could take the distance from an ally to adjust its swing waypoints. We would also like to adjust our gripper to be able to turn the lightsaber on when it picks it up. 
+
+### Setup Instructions:
+To clone all necessary repositories, clone this repository into the `src` directory in your workspace root. Then from the workspace root directory, run the command:
+
+`vcs import . < src/attack-of-the-franka/project.repos`
+
+(This assumes you don't change the name of the repository, update the path accordingly if you do.)
+
+If you don't have `vcstool` installed, install it with:
+
+`sudo apt install python3-vcstool`
 
 ### Quickstart Guide of Useful Commands:
 #### Running Full Workflow:
@@ -61,6 +66,29 @@ Upon launching the attack of the franka launch file, the camera and robot nodes 
 
 #### To Start Attacking Enemies
 `ros2 service call /look_for_enemies std_srvs/srv/Empty`
+
+### List of all nodes and launchfiles and what they do:
+#### Package Name: attack_of_the_franka
+Type: ament_python
+#### Nodes:
+- camera_processor.py
+    - Performs image processing for ally and enemy detection based on color.
+    - Gets workspace area transforms and the robot transform
+- common.py
+    - A common library for functions/values used by all nodes
+- robot_control.py
+    - Runs the state machine related to motion and interacts with our moveit_interface API to plan and attack enemies. It processes camera information to locate allies and enemies and provides helpful services to do a variety of tasks with the lightsaber and blocks interaction. 
+    simple_move
+    - Controls robot and planning scene using the moveit_interface API.
+#### Launchfiles:
+- realsense.launch.py 
+    - Launches the nodes needed to read in information from the RealSense camera and april tags to recognize the table and block locations relative to the robot base
+- robot.launch.py 
+    - Launches the robot_control node and other programs to view the rviz simulation of the franka robot
+- attach_of_the_franka.launch.py       
+    - combines the above two launch files to set up all the nodes needed to run the services and nodes needed to attack enemies
+    moveit_testing.launch.py
+- Launches the moveit launch file as well as out testing node named simple_move
 
 ### Helpful Services:
  - move_to_home (std_srvs.srv.Empty): moves the robot to a predetermined home position
@@ -85,33 +113,3 @@ Upon launching the attack of the franka launch file, the camera and robot nodes 
  - add_attached_lightsaber (std_srvs.srv.Empty): add the lightsaber attached to the end-effector to the planning scene as an attached collision object.
  - look_for_enemy (std_srvs.srv.Empty): check for any enemies detected in the planning scene and begins to calculate how to attack if possible
  - reset_allies (std_srvs.srv.Empty): updates the position of the allies in the planning scene to current
-
-### List of all nodes and launchfiles and what they do:
-#### Package Name: attack_of_the_franka
-    Type: ament_python
-#### Nodes:
-- camera_processor.py
-    - Performs image processing for ally and enemy detection based on color.
-    - Gets workspace area transforms and the robot transform
-- common.py
-    - A common library for functions/values used by all nodes
-- robot_control.py
-    - Runs the state machine related to motion and interacts with our moveit_interface API to plan and attack enemies. It processes camera information to locate allies and enemies and provides helpful services to do a variety of tasks with the lightsaber and blocks interaction. 
-    simple_move
-    - Controls robot and planning scene using the moveit_interface API.
-#### Launchfiles:
-- realsense.launch.py 
-    - Launches the nodes needed to read in information from the RealSense camera and april tags to recognize the table and block locations relative to the robot base
-- robot.launch.py 
-    - Launches the robot_control node and other programs to view the rviz simulation of the franka robot
-- attach_of_the_franka.launch.py       
-    - combines the above two launch files to set up all the nodes needed to run the services and nodes needed to attack enemies
-    moveit_testing.launch.py
-- Launches the moveit launch file as well as out testing node named simple_move
-
-### Any other information, as appropriate (lessons learned, future work):
-#### Lessons Learned:
-
-#### Future Work:
-Future work we would like to incorporate would be to have more robust movements that could take the distance from an ally to adjust its swing waypoints. We would also like to adjust our gripper to be able to turn the lightsaber on when it picks it up. 
-
