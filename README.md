@@ -48,19 +48,19 @@ Upon launching the attack of the franka launch file, the camera and robot nodes 
 
 ### Quickstart Guide of Useful Commands:
 #### Running Full Workflow:
-ros2 launch attack_of_the_franka attack_of_the_franka.launch.py
+`ros2 launch attack_of_the_franka attack_of_the_franka.launch.py`
     
 #### Run Only Camera Functionality:
-    ros2 launch attack_of_the_franka realsense.launch.py
+`ros2 launch attack_of_the_franka realsense.launch.py`
 
 #### Run Only Robot Movement Related Programs:
-    ros2 launch attack_of_the_franka robot.launch.py
+`ros2 launch attack_of_the_franka robot.launch.py`
 
 #### To Pick Up the Lightsaber from the Sheath:
-    ros2 service call /pickup_lightsaber std_srvs/srv/Empty
+`ros2 service call /pickup_lightsaber std_srvs/srv/Empty`
 
 #### To Start Attacking Enemies
-    ros2 service call /look_for_enemies std_srvs/srv/Empty
+`ros2 service call /look_for_enemies std_srvs/srv/Empty`
 
 ### Helpful Services:
  - move_to_home (std_srvs.srv.Empty): moves the robot to a predetermined home position
