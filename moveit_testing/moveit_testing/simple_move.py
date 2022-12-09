@@ -309,7 +309,7 @@ class SimpleMove(Node):
 
     def move_to_home_callback(self, request, response):
         """
-        Move to home position
+        Move to home position.
 
         Args:
             request (EmptyRequest): no data
@@ -458,7 +458,8 @@ class SimpleMove(Node):
         Store obstacle position, dimensions, id and delete flag value input by the user
 
         Example call:
-        ros2 service call /update_persistent_obstacles moveit_testing_interfaces/srv/UpdateObstacles
+        ros2 service call /update_persistent_obstacles
+        (moveit_testing_interfaces/srv/UpdateObstacles)
             "{position: {x: 0.75, y: 0.5, z: 0.0}, length: 1.0, width: 0.25, height: 4.0,
             id: 'wall1', delete_obstacle: false}"
 
@@ -492,14 +493,15 @@ class SimpleMove(Node):
 
     def attached_obstacles_callback(self, request, response):
         """
-        Srv /update_persistent_obstacles (moveit_testing_interfaces/srv/UpdateAttachedObstacles).
+        Call /update_persistent_obstacles (moveit_testing_interfaces/srv/UpdateAttachedObstacles).
 
         Store obstacle position, dimensions, ids and delete flag value input by the user
 
         Example call:
         ros2 service call /update_attached_obstacles
-        (moveit_testing_interfaces/srv/UpdateAttachedObstacles) 
-        "{link_name: "panda_hand_tcp", position: {x: 0.1, y: 0.1, z: 0.3}, length: 0.6, width: 0.05, 
+        (moveit_testing_interfaces/srv/UpdateAttachedObstacles)
+        "{link_name: "panda_hand_tcp",
+        position: {x: 0.1, y: 0.1, z: 0.3}, length: 0.6, width: 0.05,
         height: 0.2, id: 'gripping', type: 3, delete_obstacle: false}"
         Args:
             request (UpdateAttachedObstacles): obstacle information
@@ -531,6 +533,21 @@ class SimpleMove(Node):
         return response
 
     def add_walls_callback(self, request, response):
+        """
+        Call /update_persistent_obstacles (moveit_testing_interfaces/srv/UpdateAttachedObstacles).
+
+        Add walls, ceilings, and tables to planning scene for safety
+
+        Args:
+            request (EmptyRequest): no data
+
+            response (EmptyResponse): no data
+
+        Returns
+        -------
+            response (EmptyResponse): no data
+
+        """
         obstacle = moveit_msgs.msg.CollisionObject()
         obstacle.id = 'wall_0'
 
@@ -631,8 +648,7 @@ class SimpleMove(Node):
         self.moveit.update_persistent_obstacle([obstacle, obstacle1, obstacle2, obstacle3,
                                                 obstacle4, obstacle5], delete=False)
 
-        
-        #arm table should be attached collision object
+        # arm table should be attached collision object
         attached_obstacle = moveit_msgs.msg.AttachedCollisionObject()
         attached_obstacle.link_name = 'panda_link0'
         attached_obstacle.object.header.frame_id = 'panda_link0'
@@ -648,7 +664,7 @@ class SimpleMove(Node):
         shape2 = shape_msgs.msg.SolidPrimitive()
         shape2.type = 1  # Box
         shape2.dimensions = [self.robot_table_length, self.robot_table_width,
-                                                      self.robot_table_height]
+                             self.robot_table_height]
         attached_obstacle.object.primitives = [shape2]
 
         attached_obstacle.object.operation = attached_obstacle.object.ADD
@@ -658,6 +674,7 @@ class SimpleMove(Node):
         self.moveit.update_attached_obstacles(attached_obstacle, delete=False)
 
         return response
+
 
 def simple_move_entry(args=None):
     rclpy.init(args=args)
