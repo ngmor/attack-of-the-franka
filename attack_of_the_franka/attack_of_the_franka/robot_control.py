@@ -2161,9 +2161,8 @@ class RobotControl(Node):
                 # Append object data to array
                 self.detected_allies.append(obj_data)
 
-
         elif object_type == ObjectType.ENEMY:
-            
+
             self.detected_enemies = []
 
             # Populate array with instances of class that stores the object information and
@@ -2192,7 +2191,7 @@ class RobotControl(Node):
     def check_ally_danger_fall(self, enemy_obj, swing_style):
         """
         Checks the targeted enemy block's surroundings for ally blocks that
-        are at risk of being knocked 
+        are at risk of being knocked
         over by the enemy block's fall.
         Args:
             enemy_obj:  specifies the enemy whose fall trajectory is being checked
@@ -2219,14 +2218,14 @@ class RobotControl(Node):
                 # swinging so the brick falls to the left from desk view
                 if (abs(dist_y) < self.block_width*1.25) and (abs(dist_x) < (self.block_height+self.block_width*0.5)):
                     if (dist_x >= 0):
-                        self.get_logger().info(f'not safe to attack in left swing')
+                        self.get_logger().info('not safe to attack in left swing')
                         return False
                 # swing_style = 1
             if swing_style == 1:
                 # swinging so the brick falls to the right
                 if (abs(dist_y) < self.block_width*1.25) and (abs(dist_x) > -(self.block_height+self.block_width*0.5)):
                     if (dist_x <= 0):
-                        self.get_logger().info(f'not safe to attack in right swing')
+                        self.get_logger().info('not safe to attack in right swing')
                         return False
                 # swing_style = 2
             if swing_style == 2:
@@ -2234,10 +2233,11 @@ class RobotControl(Node):
                 if (((abs(dist_x)) < self.block_width)
                         and ((dist_y+self.block_width) < (self.block_height+self.block_width*0.5))
                         and (dist_y <= 0)):
-                    self.get_logger().info(f'not safe to attack in stabbing style')
+                    self.get_logger().info('not safe to attack in stabbing style')
                     return False
             self.get_logger().info(f'safe to attack in style {swing_style}')
         return True
+
 
 def entry(args=None):
     rclpy.init(args=args)
