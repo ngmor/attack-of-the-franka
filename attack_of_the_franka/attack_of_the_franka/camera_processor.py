@@ -12,6 +12,35 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+"""
+Performs image processing for ally and enemy detection based on color.
+
+Gets workspace area transforms and the robot transform from AprilTags.
+
+Publisher:
+    object_detections (Detections) : publishes the detected objects
+
+Subscribers:
+    /camera/color/image_raw (sensor_msgs.msg.Image) : gets the color image_raw data
+    /camera/color/camera_info (sensor_msgs.msg.CameraInfo) : gets meta information for the
+        camera
+    /camera/aligned_depth_to_color/image_raw (sensor_msgs.msg.Image) : gets the
+        aligned_depth_to_color raw image
+    enemy_dead_count (std_msgs.msg.Int16) : gets the dead enemy count
+
+Services:
+    start_apriltag_calibration (std_srvs.srv.Empty) :   starts the AprilTag calibrations
+    update_calibration_continuously (std_srvs.srv.Empty) :  updates the AprilTag calibrations
+
+Authors:
+    Sushma Chandra
+    Vaishnavi Dornadula
+    Nick Morales
+    Meg Sindelar
+
+Last Update: December 8th, 2022
+"""
+
 import rclpy
 from rclpy.node import Node
 from cv_bridge import CvBridge, CvBridgeError
