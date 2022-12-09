@@ -13,7 +13,7 @@
 # limitations under the License.
 
 """
-Robot Control Node
+Robot Control Node.
 
 Description: Robot Control node contains a state machine and services to allow our Franka robot
                 to detect allies and enemies. Once it is commanded to start attacking enemies,
@@ -90,7 +90,6 @@ class State(Enum):
     NEXT_WAYPOINT = auto(),
     LOOK_FOR_ENEMY = auto(),
     CHECK_FOR_ENEMY_REMAINING = auto(),
-    SETUP = auto(),
     RESET_ALLIES = auto(),
     RESET_ALLIES_WAIT = auto(),
     FIND_ALLIES = auto(),
@@ -211,9 +210,6 @@ class RobotControl(Node):
                                                  'gripper_grasp', self.gripper_grasp_callback)
         self.waypoints = self.create_service(std_srvs.srv.Empty,
                                              'waypoints', self.waypoint_callback)
-        self.test_jointtrajectory = self.create_service(std_srvs.srv.Empty,
-                                                        'test_joint_trajectory',
-                                                        self.test_jointtrajectory_callback)
         self.srv_move_to_pose = self.create_service(moveit_testing_interfaces.srv.MoveToPose,
                                                     'move_to_pose', self.move_to_pose_callback)
         self.test_waypoint_lightsaber = self.create_service(std_srvs.srv.Empty, 'joint_waypoint',
@@ -498,7 +494,8 @@ class RobotControl(Node):
 
         Returns
         -------
-            A GetPlanningScene.result (moveit_msgs/srv/GetPlanningScene)
+            GetPlanningScene.result (moveit_msgs/srv/GetPlanningScene)
+
         """
         self.obstacle_future = \
             self.obstacle_client.call_async(moveit_msgs.srv.GetPlanningScene.Request())
@@ -507,7 +504,7 @@ class RobotControl(Node):
         return self.obstacle_future.result()
 
     def close_gripper(self):
-        """Have the end-effector move to close position"""
+        """Move the end-effector to the close position."""
         grip_msg = control_msgs.action.GripperCommand.Goal()
         grip_msg.command.position = 0.0
         grip_msg.command.max_effort = 60.0
@@ -517,7 +514,7 @@ class RobotControl(Node):
             return None
 
     def open_gripper(self):
-        """Have the end-effector move to open position"""
+        """Move the end-effector to the open position."""
         grip_msg = control_msgs.action.GripperCommand.Goal()
         grip_msg.command.position = 0.03
         if self.gripper_action_client.server_is_ready():
@@ -526,7 +523,7 @@ class RobotControl(Node):
             return None
 
     def grasp(self):
-        """Have the end-effector close until it grasps an object"""
+        """Close the end-effector until it grasps an object."""
         if self.grip_lightsaber_client.server_is_ready():
             grip_goal = franka_msgs.action.Grasp.Goal()
             grip_goal.width = 0.00
@@ -540,11 +537,13 @@ class RobotControl(Node):
 
     def find_allies(self):
         """
-        Updates the allies from the detected obstacles list and creates collision objects
+        Update the allies from the detected obstacles list and creates collision objects.
+
         Returns
-        ----------
+        -------
             all_transforms_found: a boolean representing if any TransformExceptions were found
-                                    while pasing transforms
+                                    while looking for transforms
+
         """
         all_transforms_found = self.update_detected_objects(ObjectType.ALLY)
         obstacle_list = []
@@ -576,17 +575,7 @@ class RobotControl(Node):
         return all_transforms_found
 
     def timer_callback(self):
-        """
-        Check states and call the specific plan or execute from MoveIt API accordingly.
-
-        Args:
-            no arguments
-
-        Returns
-        -------
-            no returns
-
-        """
+        """Check states and call the specific plan or execute from MoveIt API accordingly."""
         # call MoveIt handler
         self.moveit.handle()
 
@@ -654,7 +643,6 @@ class RobotControl(Node):
                 table2_here = False
                 return
 
-            # TODO - move the table check to SETUP
             if table1_here and table2_here:
                 self.table1_x = table1.transform.translation.x
                 self.table1_z = table1.transform.translation.z
@@ -1215,11 +1203,12 @@ class RobotControl(Node):
 
     def pickup_lightsaber_sequence(self):
         """
-            Adds environment collision obstacles, handles attached collision objects vs
-            regular collision objects, and follows waypoints to bring it to the correct spot
-            to grab the lightsaber
-        """
+        Sequence to pickup the lightsaber.
 
+        Adds environment collision obstacles, handles attached collision objects vs
+        regular collision objects, and follows waypoints to bring it to the correct spot
+        to grab the lightsaber.
+        """
         done = False
 
         new_state = self.pickup_lightsaber_state != self.pickup_lightsaber_state_last
@@ -1433,104 +1422,48 @@ class RobotControl(Node):
 
     def pickup_lightsaber_callback(self, request, response):
         """Begin lightsaber subsequence if currently in IDLE."""
-
         if self.state == State.IDLE:
             self.state = State.PICKUP_LIGHTSABER
 
         return response
 
     def move_to_home_callback(self, request, response):
-        """
-        Move to home position
-
-        This works to move our end effector to the home postion, but it doesn't
-        necessarily put all our joint states at home. Best way to do that probably
-        be to add to the API a function that allows us to plan and execute a move
-        with the input joint states
-        panda_joint1 = 0 deg
-        panda_joint2 = -45 deg
-        panda_joint3 = 0 deg
-        panda_joint4 = -135 deg
-        panda_joint5 = 0 deg
-        panda_joint6 = 90 deg
-        panda_joint7 = 45 deg
-        """
-        # self.get_logger().info("WHAT")
+        """Move to home position."""
         # no longer necessary since we're using the API home function
         self.goal_pose = copy.deepcopy(self.home_pose)
 
         self.looking_for_enemies = 0
         self.state = State.MOVE_TO_HOME_START
-        # self.get_logger().info("WHAT")
 
         return response
 
     def look_for_enemy_callback(self, request, response):
-        """Moves the state machine to begin looking for obstacles and attacking enemies"""
-        # if self.obstacles_added == 0:
-        #     self.state = State.SETUP
-        # else:
+        """Begin looking for obstacles and attacking enemies."""
         self.state = State.FIND_ALLIES
         self.num_waypoints_completed = 0
         self.num_waypoints_completed = 0
         return response
 
     def gripper_open_callback(self, request, response):
-        """Funtion to open the grippers"""
+        """Call function to open the grippers."""
         self.open_gripper()
 
         return response
 
     def gripper_close_callback(self, request, response):
-        """Function to cause the grippers to close"""
+        """Call function to cause the grippers to close."""
         self.close_gripper()
 
         return response
 
     def gripper_grasp_callback(self, request, response):
-        """Function to cause the gripper to close around object"""
+        """Call function to cause the gripper to close around object."""
         self.grasp()
 
         return response
 
-    def test_jointtrajectory_callback(self, request, response):
-
-        traj = trajectory_msgs.msg.JointTrajectory()
-        self.joint_traj = trajectory_msgs.msg.JointTrajectory()
-        # point = trajectory_msgs.msg.JointTrajectoryPoint()
-        # point1 = trajectory_msgs.msg.JointTrajectoryPoint()
-        # point2 = trajectory_msgs.msg.JointTrajectoryPoint()
-        # point3 = trajectory_msgs.msg.JointTrajectoryPoint()
-        # point = trajectory_msgs.msg.JointTrajectoryPoint()
-        traj.header.frame_id = ''
-        traj.header.stamp = self.get_clock().now().to_msg()
-        traj.joint_names = ['panda_joint1',
-                            'panda_joint2',
-                            'panda_joint3',
-                            'panda_joint4',
-                            'panda_joint5',
-                            'panda_joint6',
-                            'panda_joint7']
-
-        # position1 = [
-        #     0.0,                    # panda_joint1
-        #     -0.7853981633974483,    # panda_joint2
-        #     0.0,                    # panda_joint3
-        #     -2.356194490192345,     # panda_joint4
-        #     0.0,                    # panda_joint5
-        #     1.5707963267948966,     # panda_joint6
-        #     0.7853981633974483,     # panda_joint7
-        #                             # TODO - This might open the gripper when we try to move home
-        #                             # CAREFUL!
-        #     0.035,                  # panda_finger_joint1
-        #     0.035,                  # panda_finger_joint2
-        # ]
-        # position2 = [0.069813, -0.5235988, 0.261799, -2.164208, 0.139626, 1.65806, 1.082104]
-
-        return response
-
     def joint_positions(self, point):
-        """Publish the robot's current joint trajectory in a JointTrajectory message"""
+        """Publish the robot's current joint trajectory in a JointTrajectory message."""
         traj = trajectory_msgs.msg.JointTrajectory()
         traj.header.frame_id = ''
         traj.header.stamp = self.get_clock().now().to_msg()
@@ -1557,7 +1490,7 @@ class RobotControl(Node):
         self.pub_joint_traj.publish(self.joint_traj)
 
     def waypoint_callback(self, request, response):
-        """calls service to add waypoint to plan to"""
+        """Call function to add waypoint to plan to."""
         self.waypoints = 1
         self.waypoint_poses()
         self.state = State.WAYPOINTS
@@ -1586,7 +1519,6 @@ class RobotControl(Node):
             response (EmptyResponse): no data
 
         """
-
         self.goal_pose = request.pose
 
         self.state = State.PLAN_TO_POSE_START
@@ -1614,11 +1546,10 @@ class RobotControl(Node):
             response (EmptyResponse): no data
 
         """
-
         return response
 
     def home_waypoint_callback(self, request, response):
-        """Service used to add a home waypoint to move to home"""
+        """Add a home waypoint to move to home."""
         home_point = geometry_msgs.msg.Point()
         home_orientation = geometry_msgs.msg.Pose().orientation
         home_point.x = 0.306891
@@ -1640,7 +1571,7 @@ class RobotControl(Node):
         return response
 
     def waypoint_poses(self):
-        """Called to add waypoint for robot motion"""
+        """Add waypoint for robot motion."""
         self.state = State.WAYPOINTS
 
         self.waypoints = 1
@@ -1781,7 +1712,6 @@ class RobotControl(Node):
 
     def add_separate_lightsaber(self):
         """Add lightsaber as a separate collision object."""
-
         obstacle = moveit_msgs.msg.CollisionObject()
         obstacle.id = 'lightsaber'
 
@@ -1803,7 +1733,6 @@ class RobotControl(Node):
 
     def remove_separate_lightsaber(self):
         """Remove lightsaber as a separate collision object."""
-
         obstacle = moveit_msgs.msg.CollisionObject()
         obstacle.id = 'lightsaber'
 
@@ -1841,32 +1770,31 @@ class RobotControl(Node):
 
     def remove_attached_lightsaber(self):
         """Remove lightsaber as an attached collision object."""
-
         attached_obstacle = moveit_msgs.msg.AttachedCollisionObject()
         attached_obstacle.object.id = 'lightsaber'
 
         self.moveit.update_attached_obstacles([attached_obstacle], delete=True)
 
     def add_separate_lightsaber_callback(self, request, response):
-        """Calls function to add lightsaber as seperate collision object"""
+        """Call function to add lightsaber as seperate collision object."""
         self.add_separate_lightsaber()
 
         return response
 
     def remove_separate_lightsaber_callback(self, request, response):
-        """calls function which removes lightsaber as collision object."""
+        """Call function which removes lightsaber as collision object."""
         self.remove_separate_lightsaber()
 
         return response
 
     def add_attached_lightsaber_callback(self, request, response):
-        """Add lightsaber as attached obstacle"""
+        """Add lightsaber as attached obstacle."""
         self.add_attached_lightsaber()
 
         return response
 
     def remove_attached_lightsaber_callback(self, request, response):
-        """Deleted lightsaber from attached obstacle list"""
+        """Delete lightsaber from attached obstacle list."""
         self.remove_attached_lightsaber()
 
         return response
@@ -1922,7 +1850,7 @@ class RobotControl(Node):
         return response
 
     def add_walls(self):
-        """Add walls and ceiling function"""
+        """Add walls and ceiling."""
         obstacle = moveit_msgs.msg.CollisionObject()
         obstacle.id = 'wall_0'
 
@@ -2074,12 +2002,12 @@ class RobotControl(Node):
         self.moveit.update_attached_obstacles([attached_obstacle], delete=False)
 
     def reset_allies_callback(self, request, response):
-        """Update ally position"""
+        """Update ally position."""
         self.allies_reset_flag = True
         return response
 
     def add_walls_callback(self, request, response):
-        """Add walls and ceilings to planning scene as collision objects"""
+        """Add walls and ceilings to planning scene as collision objects."""
         self.add_walls()
 
         return response
@@ -2094,13 +2022,14 @@ class RobotControl(Node):
         Returns
         -------
             none
+
         """
         # self.get_logger().info(f'object detection: {data}')
         self.detected_objects = data
 
     def update_detected_objects(self, object_type):
         """
-        Gets transforms seen to update all items of type input object.
+        Get transforms seen to update all items of the selected object_type.
 
         Args:
             object_type: an ObjectType variable representing whether allies or enemies are
@@ -2110,6 +2039,7 @@ class RobotControl(Node):
         -------
             all_transforms_found: a boolean representing if any TransformExceptions were found
                                     while pasing transforms
+
         """
         if self.detected_objects is None:
             return False
@@ -2165,7 +2095,7 @@ class RobotControl(Node):
 
     def check_ally_danger_fall(self, enemy_obj, swing_style):
         """
-        Checks if ally blocks are at risk of being knocked over by falling enemy block.
+        Check if ally blocks are at risk of being knocked over by falling enemy block.
 
         Args:
             enemy_obj:  specifies the enemy whose fall trajectory is being checked
@@ -2178,6 +2108,7 @@ class RobotControl(Node):
         -------
             bool:   returns false if there is an ally in the 'danger zone' of the fall and
                         true if it is safe to make the move
+
         """
         # y is left to right
         # x is forward to backward
