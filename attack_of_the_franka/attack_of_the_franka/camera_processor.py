@@ -46,8 +46,10 @@ class Pixel():
         Convert 3D real world coordinates into pixel coordinates from the input point.
 
         Args:
+        ----
             intrinsics (rs2.intrinsics): camera intrinsic information
             point (Vector3 or Point): point in 3D real world coordinates of the camera frame.
+
         """
         if intrinsics is None:
             return
@@ -121,6 +123,7 @@ class TrackbarLimits():
 
 class HSVLimits():
     """Class for creating trackbars to adjust HSV bound limits through OpenCV."""
+
     # TODO Refactor to include several trackbar limits classes
     def __init__(self, name, window_name, lower_bounds, upper_bounds, use_trackbar=False):
         """Create trackbars to help set HSV lower and upper bounds."""
@@ -279,7 +282,7 @@ class ContourData():
         broadcaster.sendTransform(transform)
 
     def get_as_detection_object(self, number):
-        """Returns information about the contour as a DetectedObject type."""
+        """Return information about the contour as a DetectedObject type."""
         return DetectedObject(
             name=self.get_frame_name(number)
             # TODO add more information?
