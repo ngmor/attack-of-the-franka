@@ -1,8 +1,23 @@
+# Copyright 2022 Attack of the Franka.
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+
 """A common library for functions/values used by all nodes."""
 
 import geometry_msgs.msg
 from math import sqrt, sin, cos
-from enum import Enum,auto
+from enum import Enum, auto
+
 
 class FRAMES():
     """Frame names."""
@@ -19,22 +34,27 @@ class FRAMES():
     ALLY = 'ally'
     ENEMY = 'enemy'
 
+
 class ObjectType(Enum):
-    """Object types"""
+    """Object types."""
+
     ALLY = auto(),
     ENEMY = auto(),
-    
+
 
 def angle_axis_to_quaternion(theta, axis):
     """
     Convert from angle-axis of rotation to a quaternion.
-    Args
+
+    Args:
     ----
        theta:  rotation angle, in radians
        axis: the rotational axis. This will be normalized
+
     Returns
     -------
        A Quaternion corresponding to the rotation
+
     """
     # https://github.com/m-elwin/me495_tf/blob/humble/me495_tf/quaternion.py
     magnitude = sqrt(axis[0]**2 + axis[1]**2 + axis[2]**2)
