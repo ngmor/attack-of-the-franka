@@ -26,6 +26,7 @@ import moveit_testing_interfaces.srv
 import copy
 from rcl_interfaces.msg import ParameterDescriptor
 
+
 class State(Enum):
     """Top level states for main state machine."""
 
@@ -87,34 +88,47 @@ class SimpleMove(Node):
         # Dimension parameters
         self.declare_parameter("robot_table.width", 0.605,
                                ParameterDescriptor(description="Robot table width"))
-        self.robot_table_width = self.get_parameter("robot_table.width").get_parameter_value().double_value
+        self.robot_table_width = self.get_parameter("robot_table.width"
+                                                    ).get_parameter_value().double_value
         self.declare_parameter("robot_table.length", 0.911,
                                ParameterDescriptor(description="Robot table length"))
-        self.robot_table_length = self.get_parameter("robot_table.length").get_parameter_value().double_value
+        self.robot_table_length = self.get_parameter("robot_table.length"
+                                                     ).get_parameter_value().double_value
         self.declare_parameter("robot_table.height", 0.827,
                                ParameterDescriptor(description="Robot table height"))
-        self.robot_table_height = self.get_parameter("robot_table.height").get_parameter_value().double_value
+        self.robot_table_height = self.get_parameter("robot_table.height"
+                                                     ).get_parameter_value().double_value
         self.declare_parameter("ceiling_height", 2.4,
                                ParameterDescriptor(description="Ceiling height from floor"))
-        self.ceiling_height = self.get_parameter("ceiling_height").get_parameter_value().double_value
+        self.ceiling_height = self.get_parameter("ceiling_height"
+                                                 ).get_parameter_value().double_value
         self.declare_parameter("side_wall.distance", 1.0,
-                               ParameterDescriptor(description="Side wall distance from base of robot"))
-        self.side_wall_distance = self.get_parameter("side_wall.distance").get_parameter_value().double_value
+                               ParameterDescriptor(
+                                description="Side wall distance from base of robot"))
+        self.side_wall_distance = self.get_parameter("side_wall.distance"
+                                                     ).get_parameter_value().double_value
         self.declare_parameter("side_wall.height", 2.4,
-                               ParameterDescriptor(description="Side wall height from floor"))
-        self.side_wall_height = self.get_parameter("side_wall.height").get_parameter_value().double_value
+                               ParameterDescriptor(
+                                description="Side wall height from floor"))
+        self.side_wall_height = self.get_parameter("side_wall.height"
+                                                   ).get_parameter_value().double_value
         self.declare_parameter("back_wall.distance", 0.75,
-                               ParameterDescriptor(description="Back wall distance from base of robot"))
-        self.back_wall_distance = self.get_parameter("back_wall.distance").get_parameter_value().double_value
+                               ParameterDescriptor(
+                                description="Back wall distance from base of robot"))
+        self.back_wall_distance = self.get_parameter("back_wall.distance"
+                                                     ).get_parameter_value().double_value
         self.declare_parameter("back_wall.height", 0.46,
                                ParameterDescriptor(description="Back wall height from floor"))
-        self.back_wall_height = self.get_parameter("back_wall.height").get_parameter_value().double_value
+        self.back_wall_height = self.get_parameter("back_wall.height"
+                                                   ).get_parameter_value().double_value
         self.declare_parameter("lightsaber.full_length", 1.122,
                                ParameterDescriptor(description="Lightsaber full length"))
-        self.lightsaber_full_length = self.get_parameter("lightsaber.full_length").get_parameter_value().double_value
+        self.lightsaber_full_length = self.get_parameter("lightsaber.full_length"
+                                                         ).get_parameter_value().double_value
         self.declare_parameter("lightsaber.grip_offset", 0.15,
                                ParameterDescriptor(description="Lightsaber grip offset"))
-        self.lightsaber_grip_offset = self.get_parameter("lightsaber.grip_offset").get_parameter_value().double_value
+        self.lightsaber_grip_offset = self.get_parameter("lightsaber.grip_offset"
+                                                         ).get_parameter_value().double_value
 
         # Initialize API class
         config = MoveConfig()
@@ -297,19 +311,15 @@ class SimpleMove(Node):
         """
         Move to home position
 
-        This works to move our end effector to the home postion, but it doesn't
-        necessarily put all our joint states at home. Best way to do that probably
-        be to add to the API a function that allows us to plan and execute a move
-        with the input joint states
-        panda_joint1 = 0 deg
-        panda_joint2 = -45 deg
-        panda_joint3 = 0 deg
-        panda_joint4 = -135 deg
-        panda_joint5 = 0 deg
-        panda_joint6 = 90 deg
-        panda_joint7 = 45 deg
-        
-        TODO finish docstring
+        Args:
+            request (EmptyRequest): no data
+
+            response (EmptyResponse): no data
+
+        Returns
+        -------
+            response (EmptyResponse): no data
+
         """
         # no longer necessary since we're using the API home function
         self.goal_pose = copy.deepcopy(self.home_pose)
@@ -482,12 +492,13 @@ class SimpleMove(Node):
 
     def attached_obstacles_callback(self, request, response):
         """
-        Call /update_persistent_obstacles (moveit_testing_interfaces/srv/UpdateAttachedObstacles) service.
+        Srv /update_persistent_obstacles (moveit_testing_interfaces/srv/UpdateAttachedObstacles).
 
         Store obstacle position, dimensions, ids and delete flag value input by the user
 
         Example call:
-        ros2 service call /update_attached_obstacles moveit_testing_interfaces/srv/UpdateAttachedObstacles 
+        ros2 service call /update_attached_obstacles
+        (moveit_testing_interfaces/srv/UpdateAttachedObstacles) 
         "{link_name: "panda_hand_tcp", position: {x: 0.1, y: 0.1, z: 0.3}, length: 0.6, width: 0.05, 
         height: 0.2, id: 'gripping', type: 3, delete_obstacle: false}"
         Args:
@@ -617,7 +628,8 @@ class SimpleMove(Node):
 
         obstacle5.header.frame_id = self.moveit.config.base_frame_id
 
-        self.moveit.update_persistent_obstacle([obstacle, obstacle1, obstacle2, obstacle3, obstacle4, obstacle5], delete=False)
+        self.moveit.update_persistent_obstacle([obstacle, obstacle1, obstacle2, obstacle3,
+                                                obstacle4, obstacle5], delete=False)
 
         
         #arm table should be attached collision object
@@ -635,7 +647,8 @@ class SimpleMove(Node):
 
         shape2 = shape_msgs.msg.SolidPrimitive()
         shape2.type = 1  # Box
-        shape2.dimensions = [self.robot_table_length, self.robot_table_width, self.robot_table_height]
+        shape2.dimensions = [self.robot_table_length, self.robot_table_width,
+                                                      self.robot_table_height]
         attached_obstacle.object.primitives = [shape2]
 
         attached_obstacle.object.operation = attached_obstacle.object.ADD
