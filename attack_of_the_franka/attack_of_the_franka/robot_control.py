@@ -212,8 +212,8 @@ class RobotControl(Node):
                                              'waypoints', self.waypoint_callback)
         self.srv_move_to_pose = self.create_service(moveit_testing_interfaces.srv.MoveToPose,
                                                     'move_to_pose', self.move_to_pose_callback)
-        self.test_waypoint_lightsaber = self.create_service(std_srvs.srv.Empty, 'joint_waypoint',
-                                                            self.test_waypoint_lightsaber_callback)
+        self.srv_joint_waypoint = self.create_service(std_srvs.srv.Empty, 'joint_waypoint',
+                                                            self.joint_waypoint_callback)
         self.srv_move_to_position = \
             self.create_service(moveit_testing_interfaces.srv.MoveToPosition,
                                 'move_to_position', self.move_to_position_callback)
@@ -237,7 +237,7 @@ class RobotControl(Node):
         self.srv_update_attached_obstacles = \
             self.create_service(moveit_testing_interfaces.srv.UpdateAttachedObstacles,
                                 'update_attached_obstacles', self.attached_obstacles_callback)
-        self.home_waypoint_srv = self.create_service(std_srvs.srv.Empty, 'home_waypoint',
+        self.srv_home_waypoint = self.create_service(std_srvs.srv.Empty, 'home_waypoint',
                                                      self.home_waypoint_callback)
         self.srv_add_walls = self.create_service(std_srvs.srv.Empty,
                                                  'add_walls', self.add_walls_callback)
@@ -1576,7 +1576,8 @@ class RobotControl(Node):
 
         self.state = State.WAYPOINTS
 
-    def test_waypoint_lightsaber_callback(self, request, response):
+    def joint_waypoint_callback(self, request, response):
+        """Initiate waypoint sequence through joint commands."""
         self.state = State.WAYPOINTS
         return response
 
