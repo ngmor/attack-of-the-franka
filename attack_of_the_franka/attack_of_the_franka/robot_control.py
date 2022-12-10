@@ -152,7 +152,7 @@ class RobotControl(Node):
                                                         using the joint angles
         move_to_pose (moveit_testing_interfaces/srv/MoveToPose): move robot to specific position
                                                                  and orientation
-        joint_waypoint (std_srvs.srv.Empty):
+        joint_waypoint (std_srvs.srv.Empty): command specific joint positions
         move_to_position (moveit_testing_interfaces/srv/MoveToPosition): move robot to specific
                                                                          position
         move_to_orientation (moveit_testing_interfaces/srv/MoveToOrientation): move robot to
