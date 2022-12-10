@@ -548,7 +548,6 @@ class RobotControl(Node):
         all_transforms_found = self.update_detected_objects(ObjectType.ALLY)
         obstacle_list = []
         if all_transforms_found:
-            # if ally00_here: # and table_here:
             for i in range(len(self.detected_allies)):
                 obstacle = moveit_msgs.msg.CollisionObject()
                 obstacle.id = self.detected_allies[i].obj.name
@@ -809,7 +808,6 @@ class RobotControl(Node):
                                                               self.right_knock_enemy_waypoint,
                                                               self.right_reverse_enemy_waypoint])
                         self.num_movements = len(self.waypoint_movements[0])
-                        # self.get_logger().info(f'num movements: {self.num_movements}')
                         ####################
                         # Testing check for if ally would be hit by falling enemy block
                         ####################
@@ -853,20 +851,13 @@ class RobotControl(Node):
 
         elif self.state == State.RIGHT_DYNAMIC_MOTION:
             self.movement_direction_sign = -1
-            # self.get_logger().info(f'Moveit State: {self.moveit._state}')
             self.get_logger().info(f'Moveit State: {self.moveit._plan_state}')
             self.get_logger().info("Right Dyanmic Motion")
             self.get_logger().info(f'num_waypoints completed: {self.num_waypoints_completed}')
             self.get_logger().info(f'num moves completed: {self.num_moves_completed}')
             if self.moveit.planning:
                 self.state = State.WAYPOINTS_WAIT
-                # self.get_logger().info("waypoints wait!")
-            # elif self.moveit.get_last_error() != MoveItApiErrors.NO_ERROR:
-            #     self.state = State.WAYPOINTS_WAIT
-            #     self.get_logger().info("error, try different state!")
             else:
-                # self.get_logger().info(f'waypoint array: {self.waypoint_movements}')
-                # self.get_logger().info("help!")
                 if self.waypoint_movements:
                     try:
                         self.moveit.plan_traj_to_pose(
@@ -998,8 +989,6 @@ class RobotControl(Node):
                 self.state = State.WAYPOINTS_WAIT
             else:
                 # add wait for collision object to be in planning scene before plan! (new state?)
-                # self.moveit.check_planning_scene(self.goal_waypoint)
-                # if ___:
                 if self.is_waypoint:
                     self.moveit.plan_traj_to_pose(self.goal_waypoint)
                 else:
@@ -1007,10 +996,7 @@ class RobotControl(Node):
                 self.waypoints += 1
 
         elif self.state == State.WAYPOINTS_WAIT:
-            # self.get_logger().info(f'Moveit State: {self.moveit._plan_state}')
-            # self.get_logger().info(f'Moveit State: {self.moveit._state}')
             # once we're not planning anymore, get the plan and move on to execute stage
-            # self.get_logger().info(f'moveit state: {self.moveit.')
             if not self.moveit.busy:
                 # This is optional. We don't have to get the plan but we can if we
                 # want to store it for later for whatever reason.
@@ -2024,7 +2010,6 @@ class RobotControl(Node):
             none
 
         """
-        # self.get_logger().info(f'object detection: {data}')
         self.detected_objects = data
 
     def update_detected_objects(self, object_type):
