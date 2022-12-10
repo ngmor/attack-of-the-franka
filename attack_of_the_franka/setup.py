@@ -21,10 +21,10 @@ setup(
     ],
     install_requires=['setuptools'],
     zip_safe=True,
-    maintainer='ngm',
+    maintainer='Attack of the Franka',
     maintainer_email='ngmorales97@gmail.com',
-    description='TODO: Package description',
-    license='TODO: License declaration',
+    description='Wield a lightsaber to vanquish enemies!',
+    license='Apache 2.0',
     tests_require=['pytest'],
     entry_points={
         'console_scripts': [

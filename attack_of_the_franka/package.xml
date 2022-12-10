@@ -3,9 +3,9 @@
 <package format="3">
   <name>attack_of_the_franka</name>
   <version>0.0.0</version>
-  <description>TODO: Package description</description>
-  <maintainer email="ngmorales97@gmail.com">ngm</maintainer>
-  <license>TODO: License declaration</license>
+  <description>Wield a lightsaber to vanquish enemies!</description>
+  <maintainer email="ngmorales97@gmail.com">Attack of the Franka</maintainer>
+  <license>Apache 2.0</license>
 
   <exec_depend>attack_of_the_franka_interfaces</exec_depend>
   <exec_depend>moveit_testing</exec_depend>
