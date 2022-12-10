@@ -8,10 +8,8 @@
  - Nick Morales
  - Megan Sindelar
 
-### Robot Used: Franka
-### Github Repository Link: 
-
-`https://github.com/ngmor/attack-of-the-franka`
+### Robot Used: Franka Emika Panda
+### [Github Repository Link](https://github.com/ngmor/attack-of-the-franka)
 
 ### Project Videos:
 https://drive.google.com/file/d/1o-AKXsr8Wqxdj_DX8L0xjUgXkbujYIkm/view?usp=sharing
