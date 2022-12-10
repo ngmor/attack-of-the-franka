@@ -12,11 +12,8 @@
 ### [Github Repository Link](https://github.com/ngmor/attack-of-the-franka)
 
 ### Project Videos:
-https://drive.google.com/file/d/1o-AKXsr8Wqxdj_DX8L0xjUgXkbujYIkm/view?usp=sharing
-https://drive.google.com/file/d/1WRIVM4u_p33MkGhK_5lwX5Xugu6PrdSB/view?usp=sharing
 
-Clean 1 ally 1 enemy shot:
-https://drive.google.com/file/d/1_kVLCrcbNZSKzEiMgiprXgzdQIEo_umJ/view?usp=sharing
+[Multi-Attack](https://user-images.githubusercontent.com/113186159/206842696-c61fa77b-1fb3-462e-9ac9-2ade4ed72283.mp4)
 
 ### Brief Description of Project:
 Our project is to configure a robot to autonomously wield a lightsaber to help the Republic fight the Separatists, where the setup of the workspace is configured by a human. The robot holds the lightsaber in its grippers to knock over members of the Separatists Army, represented by red blocks placed upright on a table near the Franka robot. The robot (Franakin Skywalker) will also need to avoid the blocks representing members of the Republic, marked by upright blue blocks. The system uses computer vision to differentiate the blocks.

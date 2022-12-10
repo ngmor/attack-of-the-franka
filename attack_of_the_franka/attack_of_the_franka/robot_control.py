@@ -1425,6 +1425,9 @@ class RobotControl(Node):
 
     def look_for_enemy_callback(self, request, response):
         """Begin looking for obstacles and attacking enemies."""
+        if self.state != State.IDLE:
+            return
+
         self.state = State.FIND_ALLIES
         self.num_waypoints_completed = 0
         self.num_waypoints_completed = 0

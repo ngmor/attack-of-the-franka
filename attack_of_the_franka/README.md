@@ -1,4 +1,10 @@
-# Attack of the Frankas Package
+# Attack of the Franka Package
+
+# Videos
+
+[Single Attack](https://user-images.githubusercontent.com/113186159/206842624-2796a540-3bb6-4c4e-9a78-5ff3526b152a.mp4)
+
+[Multi-Attack](https://user-images.githubusercontent.com/113186159/206842696-c61fa77b-1fb3-462e-9ac9-2ade4ed72283.mp4)
 
 ## Description of Package
 Contains the nodes and launchfiles necessary to run the vision and motion nodes to recognize blocks of different colors and generate paths to hit blocks of a certain color.
